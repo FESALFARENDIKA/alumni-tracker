@@ -4,13 +4,23 @@ import Topbar from './components/Topbar';
 import DashboardStats from './components/DashboardStats';
 import AlumniTable from './components/AlumniTable';
 import SearchAndTrack from './components/SearchAndTrack';
+import ExcelTracker from './components/ExcelTracker';
+import Login from './components/Login';
 import Settings from './components/Settings';
 import { CircleCheck as CheckCircle, CircleX as XCircle, Info } from 'lucide-react';
 import './App.css';
 
 function App() {
   const [activeTab, setActiveTab] = useState('search');
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    localStorage.getItem('isLoggedIn') === 'true'
+  );
   const [toasts, setToasts] = useState([]);
+
+  const handleLogin = (status) => {
+    setIsAuthenticated(status);
+    localStorage.setItem('isLoggedIn', 'true');
+  };
 
   // Toast system
   const showToast = useCallback((message, type = 'info') => {
@@ -20,6 +30,12 @@ function App() {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 3500);
   }, []);
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('isLoggedIn');
+    showToast('🔴 Sesi telah berakhir. Logout berhasil.', 'info');
+  };
 
   const getToastIcon = (type) => {
     if (type === 'success') return <CheckCircle size={18} />;
@@ -52,6 +68,8 @@ function App() {
             }}
           />
         );
+      case 'excel':
+        return <ExcelTracker onSave={(msg, type) => showToast(msg, type)} />;
       case 'settings':
         return <Settings onSave={() => showToast('⚙️ Pengaturan berhasil disimpan.', 'success')} />;
       default:
@@ -59,16 +77,31 @@ function App() {
     }
   };
 
+  if (!isAuthenticated) {
+    return (
+      <>
+        <Login onLogin={handleLogin} />
+        <div className="toast-container">
+          {toasts.map(toast => (
+            <div key={toast.id} className={`toast toast-${toast.type}`}>
+              {getToastIcon(toast.type)}
+              <span>{toast.message}</span>
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  }
+
   return (
     <div className="app">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
       <main className="main-content">
         <Topbar activeTab={activeTab} onNavigate={setActiveTab} />
         <div className="content-wrapper">
           {renderContent()}
         </div>
       </main>
-
 
       {/* Toast Notification System */}
       <div className="toast-container">

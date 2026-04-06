@@ -1,11 +1,13 @@
-import { Radar, Users, Search, LogOut } from 'lucide-react';
+import React from 'react';
+import { Radar, Users, Search, LogOut, Database } from 'lucide-react';
 import './Sidebar.css';
 
-const Sidebar = ({ activeTab, setActiveTab }) => {
+const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
   const menuItems = [
     { id: 'dashboard', icon: Radar, label: 'Radar Board' },
     { id: 'alumni', icon: Users, label: 'Hasil Tracking' },
-    { id: 'search', icon: Search, label: 'Search & Track' }
+    { id: 'search', icon: Search, label: 'Search & Track' },
+    { id: 'excel', icon: Database, label: 'Excel Search & Track' }
   ];
 
   return (
@@ -38,7 +40,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
       </nav>
 
       <div className="sidebar-footer">
-        <button className="nav-item text-danger">
+        <button className="nav-item text-danger" onClick={onLogout}>
           <LogOut size={20} className="nav-icon" />
           <span>Exit System</span>
         </button>

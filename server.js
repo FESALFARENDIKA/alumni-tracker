@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import sqlite3 from 'sqlite3';
+import XLSX from 'xlsx';
+import path from 'path';
 
 const app = express();
 const PORT = 8000;
@@ -228,6 +230,128 @@ app.get('/api/v1/alumni', (req, res) => {
     res.json(rows || []);
   });
 });
+
+// --- NEW EXCEL & SERPAPI LOGIC ---
+const EXCEL_FILE_PATH = path.join(process.cwd(), 'Alumni 2000-2025.xlsx');
+let alumniExcelData = [];
+
+// Load Excel on Start
+function loadExcelData() {
+  try {
+    console.log(`[Excel] Loading ${EXCEL_FILE_PATH}...`);
+    const workbook = XLSX.readFile(EXCEL_FILE_PATH);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    alumniExcelData = XLSX.utils.sheet_to_json(worksheet);
+    console.log(`[Excel] ✅ Loaded ${alumniExcelData.length} records.`);
+  } catch (err) {
+    console.error(`[Excel] ❌ Error loading file: ${err.message}`);
+  }
+}
+loadExcelData();
+
+// 🔎 Search Excel Data with Pagination
+app.get('/api/v1/excel/search', (req, res) => {
+  const { q, page = 1, limit = 20 } = req.query;
+  const pageNum = parseInt(page);
+  const limitNum = parseInt(limit);
+  
+  if (alumniExcelData.length === 0) {
+    return res.json({ data: [], total: 0, page: pageNum, limit: limitNum, loading: true });
+  }
+
+  let filtered = alumniExcelData;
+
+  if (q && q.trim()) {
+    const searchStr = q.toLowerCase().trim();
+    const searchTerms = searchStr.split(' ').filter(t => t.length > 0);
+    
+    filtered = alumniExcelData.filter(row => {
+      const name = String(row['Nama Lulusan'] || '').toLowerCase().trim();
+      
+      // Exact match priority (as in user's Python script)
+      if (name === searchStr) return true;
+      
+      // Fallback: AND logic for all terms
+      return searchTerms.every(term => name.includes(term));
+    });
+  }
+
+  const total = filtered.length;
+  const startIndex = (pageNum - 1) * limitNum;
+  const paginatedData = filtered.slice(startIndex, startIndex + limitNum);
+
+  res.json({
+    data: paginatedData.map(row => ({
+      nama: row['Nama Lulusan'],
+      nim: row['NIM'],
+      fakultas: row['Fakultas'] || '',
+      prodi: row['Program Studi'] || '',
+      tahun_lulus: row['Tanggal Lulus'] || row['Tahun Lulus'] || '-'
+    })),
+    total,
+    page: pageNum,
+    limit: limitNum
+  });
+});
+
+// 🔎 SerpAPI Tracking Logic (Matched to Python Script)
+const SERPAPI_KEY = "781318403c31dc4aecf60aac47d5540d971eb58ab1c023207148552d339fb261";
+
+app.post('/api/v1/track/serpapi', async (req, res) => {
+  const { nama, prodi, fakultas } = req.body;
+  
+  // Konstruksi query persis seperti python: {nama} {prodi} {fakultas} ...
+  const query = `${nama} ${prodi || ''} ${fakultas || ''} linkedin OR instagram OR facebook OR tiktok`.trim();
+  console.log(`[SerpAPI] Execute: "${query}"`);
+
+  try {
+    const params = new URLSearchParams({
+      engine: 'google',
+      q: query,
+      api_key: SERPAPI_KEY
+    });
+
+    const response = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
+    const results = await response.json();
+    
+    let linkedin = "";
+    let instagram = "";
+    let facebook = "";
+    let tiktok = "";
+    
+    // Parsing organik persis seperti contoh python
+    if (results.organic_results) {
+      for (const res of results.organic_results) {
+        const link = res.link || "";
+        
+        if (link.includes("linkedin.com") && !linkedin) {
+          linkedin = link;
+        } else if (link.includes("instagram.com") && !instagram) {
+          instagram = link;
+        } else if (link.includes("facebook.com") && !facebook) {
+          facebook = link;
+        } else if (link.includes("tiktok.com") && !tiktok) {
+          tiktok = link;
+        }
+      }
+    }
+
+    res.json({
+      nama,
+      linkedin,
+      instagram,
+      facebook,
+      tiktok,
+      results_found: !!(linkedin || instagram || facebook || tiktok)
+    });
+
+  } catch (err) {
+    console.error(`[SerpAPI] Error: ${err.message}`);
+    res.status(500).json({ error: 'Failed to search online.' });
+  }
+});
+// --- END NEW LOGIC ---
 
 // Save or update alumni
 app.post('/api/v1/alumni', (req, res) => {

@@ -6,6 +6,7 @@ const pageTitles = {
   dashboard: { title: 'Radar Board', subtitle: 'Ringkasan sistem pelacakan alumni secara real-time' },
   alumni: { title: 'Hasil Tracking', subtitle: 'Manage and review alumni tracking data' },
   search: { title: 'OSINT Search & Track', subtitle: 'Lacak alumni menggunakan sumber data publik' },
+  excel: { title: 'Deep Excel Tracking', subtitle: 'Pencarian alumni & OSINT sosial media berbasis data Excel' },
   settings: { title: 'Konfigurasi Sistem', subtitle: 'Kelola preferensi dan pengaturan sistem' },
 };
 
