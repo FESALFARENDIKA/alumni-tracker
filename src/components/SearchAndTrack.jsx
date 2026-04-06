@@ -98,39 +98,31 @@ const SearchAndTrack = ({ onResult, onSave }) => {
       ];
       let currentIdx = 0;
       
-      // Rotate statuses faster (200ms) for Ultra-Radar feeling
-      statusInterval = setInterval(() => {
-        currentIdx = (currentIdx + 1) % statuses.length;
-        setScanningStatus(statuses[currentIdx]);
-      }, 200);
-
-      // Ultra-Fast progress bar simulation (0 -> 95% in ~1.5 seconds)
-      progressInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev < 95) return prev + (95 - prev) * 0.3; 
-          return prev;
-        });
-      }, 100); // Faster tick (100ms)
-
-      // --- PDDIKTI SEARCH via PROXY ---
+      // Ultra-Fast progress jump
+      setScanningStatus('Inisialisasi Radar Sistem...');
+      setProgress(20);
+      
+      // --- PDDIKTI SEARCH via PHP PROXY ---
       const keyword = (searchForm.nama || searchForm.nim || '').trim();
+      // Using relative path for the PHP proxy on the same server
+      const API_BASE = '/proxy.php';
       console.log('PDDikti search keyword:', keyword);
       
       setSourceStatus({
         pddikti: 'scanning'
       });
       
-      setScanningStatus('Menghubungkan ke API PDDikti...');
+      setScanningStatus('Radar PDDikti Aktif...');
       
       const queryParams = new URLSearchParams({
+        action: 'pddikti',
+        keyword: keyword,
         universitas: searchForm.universitas || '',
         prodi: searchForm.prodi || ''
       });
       
       try {
-        const response = await fetch(
-          `http://localhost:8000/api/proxy/pddikti/search/mhs/${encodeURIComponent(keyword)}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
-        );
+        const response = await fetch(`${API_BASE}?${queryParams.toString()}`);
         
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -144,9 +136,6 @@ const SearchAndTrack = ({ onResult, onSave }) => {
         }));
         
         console.log(`✅ PDDikti: ${results.length} results found`);
-        
-        clearInterval(statusInterval);
-        clearInterval(progressInterval);
         setProgress(100);
         setSourceStatus({
           pddikti: 'ready'
@@ -164,8 +153,6 @@ const SearchAndTrack = ({ onResult, onSave }) => {
         
       } catch (err) {
         console.error('PDDikti search failed:', err);
-        clearInterval(statusInterval);
-        clearInterval(progressInterval);
         setProgress(100);
         setSourceStatus({
           pddikti: 'error'
@@ -208,8 +195,6 @@ const SearchAndTrack = ({ onResult, onSave }) => {
         setError(`Gagal pencarian PDDikti: ${err.message}`);
       }
     } finally {
-      if (statusInterval) clearInterval(statusInterval);
-      if (progressInterval) clearInterval(progressInterval);
       setTimeout(() => {
         setIsSearching(false);
         setScanningStatus('');
@@ -220,32 +205,27 @@ const SearchAndTrack = ({ onResult, onSave }) => {
 
   const handleSaveAlumni = async (alumniData) => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/alumni', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(alumniData)
-      });
-      
-      const res = await response.json();
-      if (response.ok) {
-        if (onSave) {
-          onSave(`🎯 ${alumniData.nama} berhasil disimpan ke database.`, 'success');
-        } else {
-          alert(`🎯 ${alumniData.nama} berhasil disimpan ke database.`);
-        }
-      } else {
-        if (onSave) {
-          onSave(`❌ Gagal menyimpan: ${res.error || 'Terjadi kesalahan'}`, 'danger');
-        } else {
-          alert(`❌ Gagal menyimpan: ${res.error || 'Terjadi kesalahan'}`);
-        }
+      const { data, error } = await supabase
+        .from('alumni')
+        .upsert({
+          "Nama Lulusan": alumniData.nama,
+          "NIM": alumniData.nim,
+          "Program Studi": alumniData.prodi,
+          "Fakultas": alumniData.universitas,
+          "Tahun Masuk": alumniData.tahun_masuk || '-',
+          "Tanggal Lulus": alumniData.tahun_lulus || '-',
+          "status": 'Tracked'
+        }, { onConflict: 'NIM' });
+
+      if (error) throw error;
+
+      if (onSave) {
+        onSave(`🎯 ${alumniData.nama} berhasil disimpan ke basis data cloud.`, 'success');
       }
     } catch (err) {
-      console.error("Save error:", err);
+      console.error("Supabase Save error:", err);
       if (onSave) {
-        onSave("❌ Gagal terhubung ke server untuk menyimpan data.", 'danger');
-      } else {
-        alert("❌ Gagal terhubung ke server untuk menyimpan data.");
+        onSave("❌ Gagal menyimpan data ke Supabase.", 'danger');
       }
     }
   };

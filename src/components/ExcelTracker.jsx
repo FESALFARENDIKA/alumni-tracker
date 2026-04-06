@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../supabaseClient';
 import { Search, Database, Globe as Linkedin, Camera as Instagram, Share2 as Facebook, Share2 as Tiktok, Globe, ExternalLink, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import './ExcelTracker.css';
 
@@ -11,25 +12,61 @@ const ExcelTracker = ({ onSave }) => {
   // Pagination State
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [limit] = useState(20);
+  const [limit] = useState(10); // Reduced for speed
 
   const fetchResults = useCallback(async (searchQuery = query, pageNum = page) => {
+    // Only search if query is long enough or empty (initial load)
+    const isInitialLoad = !searchQuery;
+    const isSearchValid = searchQuery && searchQuery.trim().length >= 3;
+
+    if (!isInitialLoad && !isSearchValid) {
+       return;
+    }
+
     setIsLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/excel/search?q=${encodeURIComponent(searchQuery)}&page=${pageNum}&limit=${limit}`);
-      const data = await response.json();
-      
-      if (data.loading) {
-        // Excel still loading on backend
-        setTimeout(() => fetchResults(searchQuery, pageNum), 2000);
-        return;
+      // BASE QUERY: Only select necessary columns
+      let supabaseQuery = supabase
+        .from('alumni')
+        .select('id, "Nama Lulusan", "NIM", "Fakultas", "Program Studi", "Tanggal Lulus", "Tahun Masuk", linkedin, instagram, facebook, tiktok', 
+          { count: searchQuery.trim() ? 'planned' : null });
+
+      // PERFORMANCE: Skip ILIKE if no search term (Direct range is 100x faster)
+      if (searchQuery && searchQuery.trim().length >= 3) {
+        supabaseQuery = supabaseQuery.ilike('Nama Lulusan', `%${searchQuery.trim()}%`);
       }
 
-      setResults(data.data || []);
-      setTotal(data.total || 0);
+      const from = (pageNum - 1) * limit;
+      const to = from + limit - 1;
+
+      const { data, count, error } = await supabaseQuery
+        .range(from, to)
+        .order('id', { ascending: true })
+        .limit(limit);
+
+      if (error) throw error;
+
+      // MAP DATA back to UI keys
+      const mappedResults = (data || []).map(row => ({
+        nama: row['Nama Lulusan'],
+        nim: row['NIM'],
+        fakultas: row['Fakultas'],
+        prodi: row['Program Studi'],
+        tahun_lulus: row['Tanggal Lulus'] || row['Tahun Masuk'] || '-',
+        osint: {
+          linkedin: row.linkedin,
+          instagram: row.instagram,
+          facebook: row.facebook,
+          tiktok: row.tiktok
+        },
+        tracked: !!(row.linkedin || row.instagram || row.facebook || row.tiktok)
+      }));
+
+      setResults(mappedResults);
+      if (count !== null) setTotal(count);
     } catch (err) {
-      console.error("Fetch failed:", err);
-      onSave("Gagal mengambil data dari server", 'danger');
+      console.error("Supabase Fetch failed:", err);
+      onSave("Gagal mengambil data dari Supabase online", 'danger');
     } finally {
       setIsLoading(false);
     }
@@ -54,8 +91,10 @@ const ExcelTracker = ({ onSave }) => {
 
   const handleTrack = async (item, index) => {
     setTrackingId(index);
+    const API_BASE = '/proxy.php';
+    
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/track/serpapi`, {
+      const response = await fetch(`${API_BASE}?action=track`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -64,21 +103,37 @@ const ExcelTracker = ({ onSave }) => {
           fakultas: item.fakultas
         })
       });
-      const osintData = await response.json();
       
-      // Update results with OSINT data
+      if (!response.ok) throw new Error("Proxy error");
+      const osintData = await response.json();
+
+      // OPTIMIZATION: Save findings back to Supabase permanently
+      if (osintData.results_found) {
+        await supabase
+          .from('alumni')
+          .update({
+            linkedin: osintData.linkedin,
+            instagram: osintData.instagram,
+            facebook: osintData.facebook,
+            tiktok: osintData.tiktok,
+            status: 'Tracked'
+          })
+          .eq('NIM', item.nim);
+      }
+      
+      // Update local state to reflect results
       const newResults = [...results];
       newResults[index] = { ...newResults[index], osint: osintData, tracked: true };
       setResults(newResults);
       
       if (osintData.results_found) {
-        onSave(`🎯 Ditemukan profil sosial media untuk ${item.nama}`, 'success');
+        onSave(`🎯 Data permanen disimpan untuk ${item.nama}`, 'success');
       } else {
-        onSave(`⚠️ Tidak ditemukan profil publik untuk ${item.nama}`, 'info');
+        onSave(`⚠️ Tidak ditemukan profil baru untuk ${item.nama}`, 'info');
       }
     } catch (err) {
-      console.error("Tracking failed:", err);
-      onSave("Gagal melakukan tracking OSINT", 'danger');
+      console.error("Tracking via Proxy failed:", err);
+      onSave("Gagal melacak OSINT (Masalah koneksi ke Proxy)", 'danger');
     } finally {
       setTrackingId(null);
     }

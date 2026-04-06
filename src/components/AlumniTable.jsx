@@ -1,6 +1,6 @@
+import { supabase } from '../supabaseClient';
 import { useState, useEffect, Fragment } from 'react';
 import { Filter, Search, CircleCheck as CheckCircle, Clock, Database, BookOpen } from 'lucide-react';
-import ReviewModal from './ReviewModal';
 import './AlumniTable.css';
 
 const AlumniTable = ({ onReview, showAll = true, filterStatus: initialFilterStatus = 'All', title = 'Hasil Tracking' }) => {
@@ -20,11 +20,31 @@ const AlumniTable = ({ onReview, showAll = true, filterStatus: initialFilterStat
   const fetchAlumni = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/alumni');
-      const data = await response.json();
-      setAlumniData(Array.isArray(data) ? data : []);
+      // Fetch only "Tracked" alumni (those that have at least one social link)
+      const { data, error } = await supabase
+        .from('alumni')
+        .select('*')
+        .or('linkedin.not.is.null,instagram.not.is.null,facebook.not.is.null,tiktok.not.is.null')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Map Supabase columns to frontend format
+      const mappedData = (data || []).map(row => ({
+        id: row.id,
+        id_mhs: row.nim || row.id.toString(), // PDDikti ID or UID
+        nama: row['Nama Lulusan'],
+        nim: row['NIM'],
+        tahun_lulus: row['Tanggal Lulus'] || row['Tahun Masuk'] || '-',
+        prodi: row['Program Studi'],
+        universitas: row['Fakultas'],
+        status: 'Tracked',
+        confidenceScore: 95
+      }));
+
+      setAlumniData(mappedData);
     } catch (err) {
-      console.error("Failed to fetch alumni:", err);
+      console.error("Supabase fetch alumni failed:", err);
     } finally {
       setIsLoading(false);
     }
@@ -47,13 +67,15 @@ const AlumniTable = ({ onReview, showAll = true, filterStatus: initialFilterStat
     setActiveDetailId(id_mhs);
     setIsFetchingDetail(true);
     
+    const API_BASE = '/proxy.php';
+    
     try {
-      const response = await fetch(`http://localhost:8000/api/proxy/pddikti/mhs/detail/${id_mhs}`);
+      const response = await fetch(`${API_BASE}?action=pddikti_detail&id=${id_mhs}`);
       const data = await response.json();
       setDetailedMhs(data);
     } catch (err) {
       console.error("Failed to fetch student details:", err);
-      alert("Gagal mengambil detail dari PDDikti.");
+      alert("Gagal mengambil detail dari PDDikti via PHP Proxy.");
       setActiveDetailId(null);
     } finally {
       setIsFetchingDetail(false);

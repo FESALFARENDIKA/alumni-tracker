@@ -1,16 +1,67 @@
-# React + Vite
+# 🛡️ Alumni Tracker v2.0 - OSINT Environment
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+[![Live Web](https://img.shields.io/badge/Live-Web%20App-brightgreen)](http://alumni-tracker.infinityfreeapp.com)
+[![Database](https://img.shields.io/badge/Database-Supabase-blue)](https://supabase.com)
+[![OSINT](https://img.shields.io/badge/OSINT-SerpAPI-orange)](https://serpapi.com)
 
-Currently, two official plugins are available:
+**Alumni Tracker** adalah sistem pemantauan dan pelacakan alumni berbasis digital (OSINT) yang dirancang untuk mengelola **142,000+ data alumni**. Sistem ini mengintegrasikan basis data Excel dengan pencarian profil media sosial secara otomatis menggunakan **SerpAPI** dan **Supabase**.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🚀 Fitur Utama
+- **Fuzzy Search (142k Records)**: Pencarian nama alumni yang sangat cepat didukung oleh index GIN di PostgreSQL/Supabase.
+- **On-Demand OSINT Discovery**: Melacak profil LinkedIn, Instagram, Facebook, dan TikTok alumni berdasarkan data akademik (Prodi & Fakultas).
+- **Secure Dashboard**: Sistem terlindungi oleh otentikasi admin.
+- **Pagination & Filters**: Navigasi data bervolume besar secara efisien.
 
-## React Compiler
+## 📊 Pengujian Kualitas (Daily Project 3)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Aspek Kualitas | Kasus Uji | Hasil yang Diharapkan | Status |
+|---|---|---|---|
+| **Keamanan** | Login dengan kredensial yang salah | Sistem menolak akses dan menampilkan pesan error | ✅ Berhasil |
+| **Integritas Data** | Pencarian nama "Mochammad Azizil Akbar" | Sistem mengembalikan data yang benar dari 142k record | ✅ Berhasil |
+| **Keandalan** | Pelacakan OSINT (SerpAPI) | Mengembalikan link profil publik yang valid (LI, IG, FB) | ✅ Berhasil |
+| **Performa** | Loading data dengan pagination | Transisi antar halaman data di bawah 1 detik | ✅ Berhasil |
+| **Usabilitas** | Tampilan Desktop & Mobile | Antarmuka responsif dan mudah digunakan | ✅ Berhasil |
 
-## Expanding the ESLint configuration
+## 🛠️ Arsitektur Sistem
+- **Frontend**: React.js, Lucide Icons, Vanilla CSS (Glassmorphism).
+- **Database**: Supabase (PostgreSQL).
+- **Cloud Hosting**:
+    - **Frontend**: InfinityFree (Static Hosting).
+    - **API Proxy**: Render (Node.js Environment).
+- **OSINT Engine**: SerpAPI (Google Search Engine API).
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 📦 Panduan Instalasi & Deploy
+
+### Prerequisites
+- Node.js & npm
+- Akun Supabase & SerpAPI
+
+### Local Setup
+1. Clone repository:
+   ```bash
+   git clone https://github.com/FESALFARENDIKA/alumni-tracker.git
+   cd alumni-tracker
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Setup `.env`:
+   ```bash
+   VITE_SUPABASE_URL=URL_SUPABASE_ANDA
+   VITE_SUPABASE_ANON_KEY=KEY_SUPABASE_ANDA
+   ```
+4. Jalankan aplikasi:
+   ```bash
+   npm run dev
+   ```
+
+### Deploy ke InfinityFree
+1. Lakukan build produksi:
+   ```bash
+   npm run build
+   ```
+2. Upload seluruh isi folder `dist` ke dalam folder `htdocs` di InfinityFree (via FTP atau File Manager).
+
+---
+**DISCLAIMER:** Sistem ini dibuat untuk kepentingan pembelajaran. Data alumni harus dijaga kerahasiaannya dan tidak digunakan untuk kepentingan komersial tanpa izin.
