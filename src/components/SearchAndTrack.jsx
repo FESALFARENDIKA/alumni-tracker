@@ -217,8 +217,36 @@ const SearchAndTrack = ({ onResult }) => {
     }
   };
 
+  const handleSaveAlumni = async (alumniData) => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/alumni', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(alumniData)
+      });
+      
+      const res = await response.json();
+      if (response.ok) {
+        alert(`🎯 ${alumniData.nama} berhasil disimpan ke database.`);
+      } else {
+        alert(`❌ Gagal menyimpan: ${res.error || 'Terjadi kesalahan'}`);
+      }
+    } catch (err) {
+      console.error("Save error:", err);
+      alert("❌ Gagal terhubung ke server untuk menyimpan data.");
+    }
+  };
+
   const handleFetchDetail = async (id_mhs) => {
     if (!id_mhs) return;
+
+    // Toggle off if already viewing this student's detail
+    const currentId = detailedMhs?.id_mhs || detailedMhs?.data?.id_mhs;
+    if (detailedMhs && currentId === id_mhs) {
+      setDetailedMhs(null);
+      return;
+    }
+
     setIsFetchingDetail(true);
     try {
       // Use proxy endpoint to avoid CORS issues
@@ -903,14 +931,24 @@ const SearchAndTrack = ({ onResult }) => {
                           </td>
                           <td>
                             {isPddikti ? (
-                              <button 
-                                className="btn btn-outline btn-sm action-review-btn"
-                                onClick={() => handleFetchDetail(d.id_mhs)}
-                                disabled={isFetchingDetail || !d.id_mhs}
-                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-                              >
-                                {isFetchingDetail ? 'Loading...' : (hasDetail ? 'Tutup Detail' : 'Detail')}
-                              </button>
+                              <div style={{ display: 'flex', gap: '5px' }}>
+                                <button 
+                                  className="btn btn-outline btn-sm action-review-btn"
+                                  onClick={() => handleFetchDetail(d.id_mhs)}
+                                  disabled={isFetchingDetail || !d.id_mhs}
+                                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                                >
+                                  {isFetchingDetail && !hasDetail ? 'Loading...' : (hasDetail ? 'Tutup Detail' : 'Detail')}
+                                </button>
+                                
+                                <button 
+                                  className="btn btn-primary btn-sm action-review-btn"
+                                  onClick={() => handleSaveAlumni(d)}
+                                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                                >
+                                  <Database size={12} style={{marginRight:'4px'}} /> Simpan
+                                </button>
+                              </div>
                             ) : (
                               d.url && (
                                 <a href={d.url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm action-review-btn" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>

@@ -15,6 +15,47 @@ app.use(express.json());
 // Initialize SQLite database
 const db = new sqlite3.Database('./alumni_osint.db');
 
+// Database initialization with health check
+db.serialize(() => {
+  // Check existing columns
+  db.all("PRAGMA table_info(alumni)", (err, columns) => {
+    if (err) {
+      console.error("Error checking table:", err);
+      return;
+    }
+
+    const hasIdMhs = columns.some(c => c.name === 'id_mhs');
+    const hasLastTracked = columns.some(c => c.name === 'last_tracked');
+
+    // If table exists but is broken (missing key columns), drop it to fix schema
+    if (columns.length > 0 && (!hasIdMhs || !hasLastTracked)) {
+      console.log("⚠️ Schema database lama tidak kompatibel. Mereset tabel alumni...");
+      db.run("DROP TABLE alumni", () => createAlumniTable());
+    } else if (columns.length === 0) {
+      // Table doesn't exist at all
+      createAlumniTable();
+    }
+  });
+});
+
+function createAlumniTable() {
+  db.run(`CREATE TABLE IF NOT EXISTS alumni (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_mhs TEXT UNIQUE,
+    nama TEXT,
+    nim TEXT,
+    universitas TEXT,
+    prodi TEXT,
+    status TEXT,
+    jk TEXT,
+    jenjang TEXT,
+    last_tracked DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`, (err) => {
+    if (err) console.error("Gagal membuat tabel:", err.message);
+    else console.log("✅ Database Alumni siap.");
+  });
+}
+
 
 
 /**
@@ -177,7 +218,39 @@ app.get('/api/proxy/pddikti/mhs/detail/:id', async (req, res) => {
 
 
 
-// Alumni database search
+// Get all alumni from database
+app.get('/api/v1/alumni', (req, res) => {
+  db.all('SELECT * FROM alumni ORDER BY last_tracked DESC', [], (err, rows) => {
+    if (err) {
+      console.error(err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
+  });
+});
+
+// Save or update alumni
+app.post('/api/v1/alumni', (req, res) => {
+  const { id_mhs, nama, nim, universitas, prodi, status, jk, jenjang } = req.body;
+  
+  if (!nama || !nim) {
+    return res.status(400).json({ error: 'Nama dan NIM wajib diisi' });
+  }
+
+  const query = `INSERT OR REPLACE INTO alumni (id_mhs, nama, nim, universitas, prodi, status, jk, jenjang, last_tracked) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`;
+  const params = [id_mhs, nama, nim, universitas, prodi, status, jk, jenjang];
+
+  db.run(query, params, function(err) {
+    if (err) {
+      console.error(err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ message: 'Alumni berhasil disimpan', id: this.lastID });
+  });
+});
+
+// Alumni database search (kept for legacy support)
 app.get('/api/v1/search/mhs/:keyword/', (req, res) => {
   const { keyword } = req.params;
   const { universitas, prodi } = req.query;
