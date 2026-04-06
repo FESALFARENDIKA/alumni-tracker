@@ -1012,3 +1012,20 @@
     margin-left: 0 !important;
   }
 }
+
+
+/* Data Table Styles for Search Results (Restored) */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}

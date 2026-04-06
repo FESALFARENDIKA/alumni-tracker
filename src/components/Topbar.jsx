@@ -4,7 +4,7 @@ import './Topbar.css';
 
 const pageTitles = {
   dashboard: { title: 'Radar Board', subtitle: 'Ringkasan sistem pelacakan alumni secara real-time' },
-  alumni: { title: 'Alumni Database', subtitle: 'Kelola dan verifikasi data pelacakan alumni' },
+  alumni: { title: 'Hasil Tracking', subtitle: 'Manage and review alumni tracking data' },
   search: { title: 'OSINT Search & Track', subtitle: 'Lacak alumni menggunakan sumber data publik' },
   settings: { title: 'Konfigurasi Sistem', subtitle: 'Kelola preferensi dan pengaturan sistem' },
 };

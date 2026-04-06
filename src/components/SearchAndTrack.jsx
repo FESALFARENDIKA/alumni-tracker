@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import './SearchAndTrack.css';
 
-const SearchAndTrack = ({ onResult }) => {
+const SearchAndTrack = ({ onResult, onSave }) => {
   const [searchForm, setSearchForm] = useState({
     nama: '',
     nim: '',
@@ -55,6 +55,7 @@ const SearchAndTrack = ({ onResult }) => {
     nubela: localStorage.getItem('NUBELA_KEY') || ''
   });
   const [detailedMhs, setDetailedMhs] = useState(null);
+  const [activeDetailId, setActiveDetailId] = useState(null);
   const [isFetchingDetail, setIsFetchingDetail] = useState(false);
   const [error, setError] = useState(null);
 
@@ -227,13 +228,25 @@ const SearchAndTrack = ({ onResult }) => {
       
       const res = await response.json();
       if (response.ok) {
-        alert(`🎯 ${alumniData.nama} berhasil disimpan ke database.`);
+        if (onSave) {
+          onSave(`🎯 ${alumniData.nama} berhasil disimpan ke database.`, 'success');
+        } else {
+          alert(`🎯 ${alumniData.nama} berhasil disimpan ke database.`);
+        }
       } else {
-        alert(`❌ Gagal menyimpan: ${res.error || 'Terjadi kesalahan'}`);
+        if (onSave) {
+          onSave(`❌ Gagal menyimpan: ${res.error || 'Terjadi kesalahan'}`, 'danger');
+        } else {
+          alert(`❌ Gagal menyimpan: ${res.error || 'Terjadi kesalahan'}`);
+        }
       }
     } catch (err) {
       console.error("Save error:", err);
-      alert("❌ Gagal terhubung ke server untuk menyimpan data.");
+      if (onSave) {
+        onSave("❌ Gagal terhubung ke server untuk menyimpan data.", 'danger');
+      } else {
+        alert("❌ Gagal terhubung ke server untuk menyimpan data.");
+      }
     }
   };
 
@@ -241,12 +254,14 @@ const SearchAndTrack = ({ onResult }) => {
     if (!id_mhs) return;
 
     // Toggle off if already viewing this student's detail
-    const currentId = detailedMhs?.id_mhs || detailedMhs?.data?.id_mhs;
-    if (detailedMhs && currentId === id_mhs) {
+    if (activeDetailId === id_mhs) {
       setDetailedMhs(null);
+      setActiveDetailId(null);
       return;
     }
 
+    setDetailedMhs(null);
+    setActiveDetailId(id_mhs);
     setIsFetchingDetail(true);
     try {
       // Use proxy endpoint to avoid CORS issues
@@ -891,7 +906,7 @@ const SearchAndTrack = ({ onResult }) => {
                     const d = result.data;
                     const isPddikti = result.sumber.toLowerCase().includes('pddikti');
                     // Check if detail is currently open for THIS specific user
-                    const hasDetail = detailedMhs && (detailedMhs.id_mhs === d.id_mhs || detailedMhs.data?.nama === d.nama);
+                    const hasDetail = activeDetailId === d.id_mhs;
 
                     return (
                       <Fragment key={idx}>
@@ -963,69 +978,76 @@ const SearchAndTrack = ({ onResult }) => {
                         {isPddikti && hasDetail && (
                           <tr className="detail-expanded-row animate-fade-in" style={{ backgroundColor: 'rgba(5, 10, 24, 0.4)' }}>
                             <td colSpan="7" style={{ padding: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                               <div className="pddikti-history-table-container">
-                                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem'}}>
-                                    <h5 className="history-subtitle" style={{margin:0}}>Detail Lengkap Mahasiswa</h5>
-                                    <span className="text-xs text-muted">Data real-time dari server PDDIKTI</span>
-                                  </div>
-                                  
-                                  <div className="history-table-wrapper mb-4">
-                                    <table className="history-table">
-                                      <tbody>
-                                        <tr>
-                                          <td><strong>Kode PT</strong></td>
-                                          <td>{detailedMhs.kode_pt || detailedMhs.data?.kode_pt || '-'}</td>
-                                          <td><strong>Program Studi</strong></td>
-                                          <td>{detailedMhs.prodi || detailedMhs.data?.prodi || d.prodi || '-'}</td>
-                                        </tr>
-                                        <tr>
-                                          <td><strong>Kode Prodi</strong></td>
-                                          <td>{detailedMhs.kode_prodi || detailedMhs.data?.kode_prodi || '-'}</td>
-                                          <td><strong>Jenis Daftar</strong></td>
-                                          <td>{detailedMhs.jenis_daftar || detailedMhs.data?.jenis_daftar || '-'}</td>
-                                        </tr>
-                                        <tr>
-                                          <td><strong>Jenis Kelamin</strong></td>
-                                          <td>{detailedMhs.jenis_kelamin || detailedMhs.data?.jenis_kelamin || '-'}</td>
-                                          <td><strong>Jenjang</strong></td>
-                                          <td>{detailedMhs.jenjang || detailedMhs.data?.jenjang || '-'}</td>
-                                        </tr>
-                                        <tr>
-                                          <td><strong>Tanggal Masuk</strong></td>
-                                          <td colSpan="3">{detailedMhs.tanggal_masuk || detailedMhs.data?.tanggal_masuk || '-'}</td>
-                                        </tr>
-                                      </tbody>
-                                    </table>
-                                  </div>
+                               {!detailedMhs ? (
+                                 <div style={{ textAlign: 'center', padding: '2rem' }}>
+                                   <div className="spinner-xs" style={{ margin: '0 auto 1rem auto', width: '24px', height: '24px' }}></div>
+                                   <p className="text-sm text-muted">Mengambil data dari PDDIKTI...</p>
+                                 </div>
+                               ) : (
+                                 <div className="pddikti-history-table-container">
+                                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem'}}>
+                                     <h5 className="history-subtitle" style={{margin:0}}>Detail Lengkap Mahasiswa</h5>
+                                     <span className="text-xs text-muted">Data real-time dari server PDDIKTI</span>
+                                   </div>
+                                   
+                                   <div className="history-table-wrapper mb-4">
+                                     <table className="history-table">
+                                       <tbody>
+                                         <tr>
+                                           <td><strong>Kode PT</strong></td>
+                                           <td>{detailedMhs?.kode_pt || detailedMhs?.data?.kode_pt || '-'}</td>
+                                           <td><strong>Program Studi</strong></td>
+                                           <td>{detailedMhs?.prodi || detailedMhs?.data?.prodi || d.prodi || '-'}</td>
+                                         </tr>
+                                         <tr>
+                                           <td><strong>Kode Prodi</strong></td>
+                                           <td>{detailedMhs?.kode_prodi || detailedMhs?.data?.kode_prodi || '-'}</td>
+                                           <td><strong>Jenis Daftar</strong></td>
+                                           <td>{detailedMhs?.jenis_daftar || detailedMhs?.data?.jenis_daftar || '-'}</td>
+                                         </tr>
+                                         <tr>
+                                           <td><strong>Jenis Kelamin</strong></td>
+                                           <td>{detailedMhs?.jenis_kelamin || detailedMhs?.data?.jenis_kelamin || '-'}</td>
+                                           <td><strong>Jenjang</strong></td>
+                                           <td>{detailedMhs?.jenjang || detailedMhs?.data?.jenjang || '-'}</td>
+                                         </tr>
+                                         <tr>
+                                           <td><strong>Tanggal Masuk</strong></td>
+                                           <td colSpan="3">{detailedMhs?.tanggal_masuk || detailedMhs?.data?.tanggal_masuk || '-'}</td>
+                                         </tr>
+                                       </tbody>
+                                     </table>
+                                   </div>
 
-                                  <h5 className="history-subtitle">Riwayat Status Kuliah</h5>
-                                  <div className="history-table-wrapper">
-                                    <table className="history-table">
-                                      <thead>
-                                        <tr>
-                                          <th>Semester</th>
-                                          <th>Status</th>
-                                          <th>SKS</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {(detailedMhs.riwayat_studi || detailedMhs.data?.riwayat_studi || []).map((sem, sIdx) => (
-                                          <tr key={sIdx}>
-                                            <td>{sem.id_smt || sem.semester}</td>
-                                            <td><span className={`status-pill ${sem.id_stat_mhs?.toLowerCase() || 'aktif'}`}>{sem.nm_stat_mhs || 'Aktif'}</span></td>
-                                            <td>{sem.sks_smt || 0}</td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                  
-                                  {detailedMhs.riwayat_pendidikan && (
-                                    <div className="academic-history-summary mt-4">
-                                      <p className="text-xs text-muted">No Peserta / Ijazah: {detailedMhs.riwayat_pendidikan[0]?.no_seri_ijazah || '-'}</p>
-                                    </div>
-                                  )}
-                               </div>
+                                   <h5 className="history-subtitle">Riwayat Status Kuliah</h5>
+                                   <div className="history-table-wrapper">
+                                     <table className="history-table">
+                                       <thead>
+                                         <tr>
+                                           <th>Semester</th>
+                                           <th>Status</th>
+                                           <th>SKS</th>
+                                         </tr>
+                                       </thead>
+                                       <tbody>
+                                         {(detailedMhs?.riwayat_studi || detailedMhs?.data?.riwayat_studi || []).map((sem, sIdx) => (
+                                           <tr key={sIdx}>
+                                             <td>{sem.id_smt || sem.semester}</td>
+                                             <td><span className={`status-pill ${sem.id_stat_mhs?.toLowerCase() || 'aktif'}`}>{sem.nm_stat_mhs || 'Aktif'}</span></td>
+                                             <td>{sem.sks_smt || 0}</td>
+                                           </tr>
+                                         ))}
+                                       </tbody>
+                                     </table>
+                                   </div>
+                                   
+                                   {detailedMhs?.riwayat_pendidikan && (
+                                     <div className="academic-history-summary mt-4">
+                                       <p className="text-xs text-muted">No Peserta / Ijazah: {detailedMhs?.riwayat_pendidikan[0]?.no_seri_ijazah || '-'}</p>
+                                     </div>
+                                   )}
+                                 </div>
+                               )}
                             </td>
                           </tr>
                         )}

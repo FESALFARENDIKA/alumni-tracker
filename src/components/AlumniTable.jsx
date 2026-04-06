@@ -1,9 +1,9 @@
 import { useState, useEffect, Fragment } from 'react';
-import { Filter, Search, ShieldAlert, CircleCheck as CheckCircle, Clock, Database, BookOpen } from 'lucide-react';
+import { Filter, Search, CircleCheck as CheckCircle, Clock, Database, BookOpen } from 'lucide-react';
 import ReviewModal from './ReviewModal';
 import './AlumniTable.css';
 
-const AlumniTable = ({ onReview, showAll = true, filterStatus: initialFilterStatus = 'All', title = 'Alumni Database' }) => {
+const AlumniTable = ({ onReview, showAll = true, filterStatus: initialFilterStatus = 'All', title = 'Hasil Tracking' }) => {
   const [filterStatus, setFilterStatus] = useState(initialFilterStatus);
   const [filterYear, setFilterYear] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
@@ -104,7 +104,7 @@ const AlumniTable = ({ onReview, showAll = true, filterStatus: initialFilterStat
     <div className="alumni-table-container animate-fade-in">
       <div className="page-header">
         <h1>{title}</h1>
-        <p>Manage and review alumni tracking data</p>
+        <p>Database hasil pelacakan alumni secara menyeluruh</p>
       </div>
 
       {/* Table Controls (Filters & Search) */}
@@ -188,15 +188,6 @@ const AlumniTable = ({ onReview, showAll = true, filterStatus: initialFilterStat
                             <BookOpen size={14} className="mr-1" /> 
                             {isFetchingDetail && !hasDetail ? '...' : (hasDetail ? 'Tutup' : 'Detail')}
                           </button>
-                          
-                          {onReview && (
-                            <button
-                              className="btn btn-outline btn-sm action-review-btn"
-                              onClick={() => onReview(row)}
-                            >
-                              <ShieldAlert size={14} /> Review
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>

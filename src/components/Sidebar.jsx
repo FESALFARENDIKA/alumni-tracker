@@ -4,7 +4,7 @@ import './Sidebar.css';
 const Sidebar = ({ activeTab, setActiveTab }) => {
   const menuItems = [
     { id: 'dashboard', icon: Radar, label: 'Radar Board' },
-    { id: 'alumni', icon: Users, label: 'Alumni Data' },
+    { id: 'alumni', icon: Users, label: 'Hasil Tracking' },
     { id: 'search', icon: Search, label: 'Search & Track' }
   ];
 

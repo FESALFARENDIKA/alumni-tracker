@@ -4,14 +4,12 @@ import Topbar from './components/Topbar';
 import DashboardStats from './components/DashboardStats';
 import AlumniTable from './components/AlumniTable';
 import SearchAndTrack from './components/SearchAndTrack';
-import ReviewModal from './components/ReviewModal';
 import Settings from './components/Settings';
 import { CircleCheck as CheckCircle, CircleX as XCircle, Info } from 'lucide-react';
 import './App.css';
 
 function App() {
   const [activeTab, setActiveTab] = useState('search');
-  const [reviewData, setReviewData] = useState(null);
   const [toasts, setToasts] = useState([]);
 
   // Toast system
@@ -29,14 +27,6 @@ function App() {
     return <Info size={18} />;
   };
 
-  const handleReviewAction = (action, data) => {
-    setReviewData(null);
-    if (action === 'Approve') {
-      showToast(`✅ Data ${data.name} telah dikonfirmasi sebagai valid.`, 'success');
-    } else if (action === 'Reject') {
-      showToast(`❌ Data ${data.name} ditandai sebagai False Positive.`, 'danger');
-    }
-  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -45,7 +35,6 @@ function App() {
       case 'alumni':
         return (
           <AlumniTable
-            onReview={(data) => setReviewData(data)}
             onTrack={(data) => {
               showToast(`🔍 Memulai tracking OSINT untuk ${data.name}...`, 'info');
             }}
@@ -55,6 +44,7 @@ function App() {
       case 'search':
         return (
           <SearchAndTrack
+            onSave={(msg, type) => showToast(msg, type)}
             onResult={(data) => {
               if (data && data.results_count > 0) {
                 showToast(`🎯 Ditemukan ${data.results_count} kandidat untuk "${data.search_criteria?.nama}".`, 'success');
@@ -79,13 +69,6 @@ function App() {
         </div>
       </main>
 
-      {reviewData && (
-        <ReviewModal
-          data={reviewData}
-          onClose={() => setReviewData(null)}
-          onAction={(action) => handleReviewAction(action, reviewData)}
-        />
-      )}
 
       {/* Toast Notification System */}
       <div className="toast-container">
