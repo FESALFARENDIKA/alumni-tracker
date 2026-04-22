@@ -1,7 +1,7 @@
 <?php
 /**
- * 🚀 ALUMNI TRACKER PROXY (PHP TURBO VERSION)
- * Digunakan untuk Bypass CORS di InfinityFree Tanpa Perlu Server Render/Node.js
+ * 🚀 ALUMNI TRACKER PROXY V3.2 (REVERTED OSINT LOGIC)
+ * Reverted to user's preferred simple query for better LinkedIn accuracy.
  */
 
 header("Access-Control-Allow-Origin: *");
@@ -13,12 +13,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// 🔑 SerpAPI Key
 $serpapi_key = "781318403c31dc4aecf60aac47d5540d971eb58ab1c023207148552d339fb261";
-
 $action = $_GET['action'] ?? "";
 
-// --- 1. PDDIKTI SEARCH (Radar) ---
+// --- 1. PDDIKTI SEARCH ---
 if ($action === 'pddikti') {
     $keyword = $_GET['keyword'] ?? "";
     $url = "https://api-frontend.kemdikbud.go.id/search_mhs";
@@ -28,50 +26,24 @@ if ($action === 'pddikti') {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-        'Referer: https://pddikti.kemdikbud.go.id/',
-        'Origin: https://pddikti.kemdikbud.go.id'
-    ]);
-    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-    curl_setopt($ch, CURLOPT_TIMEOUT, 60); 
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4); // Force IPv4 for shared hosting
-    
-    $response = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    
-    if ($http_code !== 200 || !$response) {
-        echo json_encode([]); 
-    } else {
-        echo $response;
-    }
-} 
-
-// --- 2. PDDIKTI DETAIL ---
-else if ($action === 'pddikti_detail') {
-    $id = $_GET['id'] ?? "";
-    if (!$id) die(json_encode(["error" => "No ID provided"]));
-    
-    $url = "https://api-frontend.kemdikbud.go.id/detail_mhs/" . $id;
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
     curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+    
     $response = curl_exec($ch);
     curl_close($ch);
     echo $response;
 }
 
-// --- 3. OSINT TRACKING (SerpAPI) ---
+// --- 2. OSINT TRACKING (REVERTED TO USER LOGIC) ---
 else if ($action === 'track') {
     $json = file_get_contents('php://input');
     $data = json_decode($json);
     
     $nama = $data->nama ?? "";
+    
+    // MENGGUNAKAN QUERY LAMA ANDA
     $query = urlencode("$nama linkedin OR instagram OR facebook OR tiktok");
     $url = "https://serpapi.com/search.json?engine=google&q=$query&api_key=$serpapi_key";
     
@@ -86,22 +58,50 @@ else if ($action === 'track') {
     
     $organic = $results['organic_results'] ?? [];
     $linkedin = ""; $instagram = ""; $facebook = ""; $tiktok = "";
+    $email = ""; $tempat_kerja = ""; $posisi = ""; $jenis_pekerjaan = "";
     
     foreach ($organic as $res) {
         $link = $res['link'] ?? "";
-        if (strpos($link, "linkedin.com") !== false && !$linkedin) $linkedin = $link;
+        $snippet = $res['snippet'] ?? "";
+        $title = $res['title'] ?? "";
+
+        if (strpos($link, "linkedin.com") !== false && !$linkedin) {
+            $linkedin = $link;
+            // Ekstraksi posisi dasar
+            $clean = preg_replace('/\s*[\|·]\s*LinkedIn.*$/i', '', $title);
+            $parts = preg_split('/\s+[\-–|·]\s+/', $clean);
+            if (count($parts) >= 2) $posisi = trim($parts[1]);
+        }
         else if (strpos($link, "instagram.com") !== false && !$instagram) $instagram = $link;
+        else if (strpos($link, "facebook.com") !== false && !$facebook) $facebook = $link;
+        else if (strpos($link, "tiktok.com") !== false && !$tiktok) $tiktok = $link;
+        
+        if (!$email && preg_match('/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/', $snippet, $matches)) {
+            $email = $matches[0];
+        }
     }
+
+    // Skor Akurasi Sederhana
+    $akurasi = 0;
+    if ($linkedin) $akurasi += 70;
+    if ($instagram) $akurasi += 10;
+    if ($facebook) $akurasi += 10;
+    if ($email) $akurasi += 10;
     
     echo json_encode([
         "nama" => $nama,
         "linkedin" => $linkedin,
         "instagram" => $instagram,
+        "facebook" => $facebook,
+        "tiktok" => $tiktok,
+        "email" => $email,
+        "posisi" => $posisi,
+        "akurasi" => $akurasi,
         "results_found" => !!($linkedin || $instagram)
     ]);
 } 
 
 else {
-    echo json_encode(["status" => "PHP Turbo Proxy Active", "server" => $_SERVER['SERVER_SOFTWARE']]);
+    echo json_encode(["status" => "Alumni Tracker Proxy V3.2", "engine" => "Reverted OSINT"]);
 }
 ?>

@@ -17,30 +17,8 @@ app.use(express.json());
 // Initialize SQLite database
 const db = new sqlite3.Database('./alumni_osint.db');
 
-// Database initialization with health check
+// Database initialization
 db.serialize(() => {
-  // Check existing columns
-  db.all("PRAGMA table_info(alumni)", (err, columns) => {
-    if (err) {
-      console.error("Error checking table:", err);
-      return;
-    }
-
-    const hasIdMhs = columns.some(c => c.name === 'id_mhs');
-    const hasLastTracked = columns.some(c => c.name === 'last_tracked');
-
-    // If table exists but is broken (missing key columns), drop it to fix schema
-    if (columns.length > 0 && (!hasIdMhs || !hasLastTracked)) {
-      console.log("⚠️ Schema database lama tidak kompatibel. Mereset tabel alumni...");
-      db.run("DROP TABLE alumni", () => createAlumniTable());
-    } else if (columns.length === 0) {
-      // Table doesn't exist at all
-      createAlumniTable();
-    }
-  });
-});
-
-function createAlumniTable() {
   db.run(`CREATE TABLE IF NOT EXISTS alumni (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     id_mhs TEXT UNIQUE,
@@ -51,230 +29,44 @@ function createAlumniTable() {
     status TEXT,
     jk TEXT,
     jenjang TEXT,
-    last_tracked DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`, (err) => {
-    if (err) console.error("Gagal membuat tabel:", err.message);
-    else console.log("✅ Database Alumni siap.");
-  });
-}
-
-
-
-/**
- * Fetch from a URL with timeout support
- */
-async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    clearTimeout(id);
-    return res;
-  } catch (err) {
-    clearTimeout(id);
-    throw err;
-  }
-}
-
-/**
- * Fetch from Official API with proper spoofed headers
- * Returns { data, source }
- */
-async function fetchPddikti(path) {
-  try {
-    const publicPath = path.replace(/^\//, ''); // strip leading slash
-    const publicUrl = `${PDDIKTI_PUBLIC_API}/${publicPath}`;
-    console.log(`[PDDikti] Fetching: ${publicUrl}`);
-    
-    const headers = {
-      'Accept': 'application/json, text/plain, */*',
-      'Origin': 'https://pddikti.kemdiktisaintek.go.id',
-      'Referer': 'https://pddikti.kemdiktisaintek.go.id/',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
-    };
-
-    const res = await fetchWithTimeout(publicUrl, { headers }, 8000);
-    if (res.ok) {
-      const data = await res.json();
-      console.log(`[PDDikti] ✅ Public API OK`);
-      return { data, source: 'pddikti-official' };
-    }
-    const errData = await res.text();
-    throw new Error(`HTTP ${res.status}: ${errData}`);
-  } catch (err) {
-    throw new Error(`PDDikti request failed: ${err.message}`);
-  }
-}
-
-
-
-// API Overview
-app.get('/api/v1/', (req, res) => {
-  res.json({
-    message: 'OSINT Alumni API Server (Real PDDikti)',
-    version: '2.0.0',
-    sources: {
-      primary: PDDIKTI_PUBLIC_API
-    },
-    endpoints: [
-      '/api/proxy/pddikti/search/mhs/:keyword',
-      '/api/proxy/pddikti/mhs/detail/:id_mhs'
-    ]
-  });
+    last_tracked DATETIME DEFAULT CURRENT_TIMESTAMP,
+    linkedin TEXT,
+    instagram TEXT,
+    facebook TEXT,
+    tiktok TEXT,
+    email TEXT,
+    tempat_kerja TEXT,
+    posisi TEXT,
+    jenis_pekerjaan TEXT,
+    akurasi INTEGER
+  )`);
 });
-
-
-app.get('/api/proxy/pddikti/search/mhs/:keyword', async (req, res) => {
-  const keyword = decodeURIComponent(req.params.keyword);
-  const { universitas, prodi } = req.query;
-  
-  console.log(`\n[SEARCH] keyword="${keyword}" universitas="${universitas}" prodi="${prodi}"`);
-
-  try {
-    const { data, source } = await fetchPddikti(`/pencarian/mhs/${encodeURIComponent(keyword)}`);
-
-    // Normalize: PDDikti API returns array OR { mahasiswa: [...] }
-    let results = [];
-    if (Array.isArray(data)) {
-      results = data;
-    } else if (data?.mahasiswa && Array.isArray(data.mahasiswa)) {
-      results = data.mahasiswa;
-    } else if (data?.data && Array.isArray(data.data)) {
-      results = data.data;
-    } else if (data && typeof data === 'object' && !data.error) {
-      // Single object returned
-      results = [data];
-    }
-
-    // Normalize field names so frontend gets consistent shape
-    results = results.map(item => ({
-      id_mhs: item.id || item.id_mhs || item.mahasiswa_id || '',
-      nama: item.nama || item.nm_mhs || item.name || '',
-      nim: item.nim || item.nipd || '',
-      nipd: item.nipd || item.nim || '',
-      nm_mhs: item.nm_mhs || item.nama || item.name || '',
-      universitas: item.nama_pt || item.pt || item.universitas || item.perguruan_tinggi || '',
-      nama_pt: item.nama_pt || item.pt || item.universitas || item.perguruan_tinggi || '',
-      prodi: item.nama_prodi || item.prodi || item.program_studi || '',
-      nama_prodi: item.nama_prodi || item.prodi || item.program_studi || '',
-      jenjang: item.jenjang || item.jenjang_didik || 'S1',
-      status: item.status || item.status_mhs || 'Aktif',
-      jk: item.jk || item.jenis_kelamin_id || '',
-      jenis_kelamin: item.jk || item.jenis_kelamin || item.jenis_kelamin_id || '',
-      kode_pt: item.kode_pt || '',
-      kode_prodi: item.kode_prodi || '',
-      // keep original data too
-      ...item
-    }));
-
-    // Optional filter by universitas/prodi if provided
-    if (universitas && universitas.trim()) {
-      results = results.filter(r =>
-        (r.nama_pt || '').toLowerCase().includes(universitas.toLowerCase()) ||
-        (r.universitas || '').toLowerCase().includes(universitas.toLowerCase())
-      );
-    }
-    if (prodi && prodi.trim()) {
-      results = results.filter(r =>
-        (r.nama_prodi || '').toLowerCase().includes(prodi.toLowerCase()) ||
-        (r.prodi || '').toLowerCase().includes(prodi.toLowerCase())
-      );
-    }
-
-    console.log(`[SEARCH] ✅ ${results.length} results (source: ${source})`);
-    res.json(results);
-
-  } catch (err) {
-    console.error(`[SEARCH] ❌ Error: ${err.message}`);
-    res.status(503).json({
-      error: 'PDDikti API tidak tersedia',
-      message: err.message,
-      hint: 'Pastikan django server berjalan: cd api-pddikti-main && python manage.py runserver 8001'
-    });
-  }
-});
-
-
-app.get('/api/proxy/pddikti/mhs/detail/:id', async (req, res) => {
-  const id = req.params.id;
-  console.log(`\n[DETAIL] id_mhs="${id}"`);
-
-  try {
-    const { data, source } = await fetchPddikti(`/detail/mhs/${id}`);
-    console.log(`[DETAIL] ✅ (source: ${source})`);
-    
-    // Ensure consistent shape for frontend
-    res.json({
-      ...data,
-      data: data
-    });
-
-  } catch (err) {
-    console.error(`[DETAIL] ❌ Error: ${err.message}`);
-    res.status(503).json({
-      error: 'PDDikti API tidak tersedia',
-      message: err.message
-    });
-  }
-});
-
-
-
-// Get all alumni from database
-app.get('/api/v1/alumni', (req, res) => {
-  db.all('SELECT * FROM alumni ORDER BY last_tracked DESC', [], (err, rows) => {
-    if (err) {
-      console.error(err.message);
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(rows || []);
-  });
-});
-
-// --- NEW EXCEL & SERPAPI LOGIC ---
-const EXCEL_FILE_PATH = path.join(process.cwd(), 'Alumni 2000-2025.xlsx');
-let alumniExcelData = [];
 
 // Load Excel on Start
-function loadExcelData() {
-  try {
-    console.log(`[Excel] Loading ${EXCEL_FILE_PATH}...`);
-    const workbook = XLSX.readFile(EXCEL_FILE_PATH);
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    alumniExcelData = XLSX.utils.sheet_to_json(worksheet);
-    console.log(`[Excel] ✅ Loaded ${alumniExcelData.length} records.`);
-  } catch (err) {
-    console.error(`[Excel] ❌ Error loading file: ${err.message}`);
-  }
+const EXCEL_FILE_PATH = path.join(process.cwd(), 'Alumni 2000-2025.xlsx');
+let alumniExcelData = [];
+try {
+  const workbook = XLSX.readFile(EXCEL_FILE_PATH);
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  alumniExcelData = XLSX.utils.sheet_to_json(worksheet);
+  console.log(`[Excel] ✅ Loaded ${alumniExcelData.length} records.`);
+} catch (err) {
+  console.error(`[Excel] ❌ Error loading file: ${err.message}`);
 }
-loadExcelData();
 
 // 🔎 Search Excel Data with Pagination
 app.get('/api/v1/excel/search', (req, res) => {
-  const { q, page = 1, limit = 20 } = req.query;
+  const { q, page = 1, limit = 10 } = req.query;
   const pageNum = parseInt(page);
   const limitNum = parseInt(limit);
   
-  if (alumniExcelData.length === 0) {
-    return res.json({ data: [], total: 0, page: pageNum, limit: limitNum, loading: true });
-  }
-
   let filtered = alumniExcelData;
-
   if (q && q.trim()) {
     const searchStr = q.toLowerCase().trim();
-    const searchTerms = searchStr.split(' ').filter(t => t.length > 0);
-    
-    filtered = alumniExcelData.filter(row => {
-      const name = String(row['Nama Lulusan'] || '').toLowerCase().trim();
-      
-      // Exact match priority (as in user's Python script)
-      if (name === searchStr) return true;
-      
-      // Fallback: AND logic for all terms
-      return searchTerms.every(term => name.includes(term));
-    });
+    filtered = alumniExcelData.filter(row => 
+      String(row['Nama Lulusan'] || '').toLowerCase().includes(searchStr)
+    );
   }
 
   const total = filtered.length;
@@ -295,118 +87,62 @@ app.get('/api/v1/excel/search', (req, res) => {
   });
 });
 
-// 🔎 SerpAPI Tracking Logic (Matched to Python Script)
+// 🔎 OSINT Tracking (User-Preferred Logic)
 const SERPAPI_KEY = "781318403c31dc4aecf60aac47d5540d971eb58ab1c023207148552d339fb261";
 
 app.post('/api/v1/track/serpapi', async (req, res) => {
-  const { nama, prodi, fakultas } = req.body;
-  
-  // Konstruksi query persis seperti python: {nama} {prodi} {fakultas} ...
-  const query = `${nama} ${prodi || ''} ${fakultas || ''} linkedin OR instagram OR facebook OR tiktok`.trim();
-  console.log(`[SerpAPI] Execute: "${query}"`);
+  const { nama } = req.body;
+  console.log(`[OSINT] Tracking: "${nama}"`);
 
   try {
-    const params = new URLSearchParams({
-      engine: 'google',
-      q: query,
-      api_key: SERPAPI_KEY
-    });
+    // MENGGUNAKAN QUERY SEDERHANA (SESUAI PERMINTAAN USER)
+    const q = `${nama} linkedin OR instagram OR facebook OR tiktok`;
+    const params = new URLSearchParams({ engine: 'google', q: q, api_key: SERPAPI_KEY });
+    const resp = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
+    const results = await resp.json();
 
-    const response = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
-    const results = await response.json();
+    let linkedin = "", instagram = "", facebook = "", tiktok = "";
+    let email = "", posisi = "";
     
-    let linkedin = "";
-    let instagram = "";
-    let facebook = "";
-    let tiktok = "";
-    
-    // Parsing organik persis seperti contoh python
-    if (results.organic_results) {
-      for (const res of results.organic_results) {
-        const link = res.link || "";
-        
-        if (link.includes("linkedin.com") && !linkedin) {
-          linkedin = link;
-        } else if (link.includes("instagram.com") && !instagram) {
-          instagram = link;
-        } else if (link.includes("facebook.com") && !facebook) {
-          facebook = link;
-        } else if (link.includes("tiktok.com") && !tiktok) {
-          tiktok = link;
-        }
+    const organic = results.organic_results || [];
+    for (const r of organic) {
+      const link = r.link || "";
+      const snippet = r.snippet || "";
+      const title = r.title || "";
+
+      if (link.includes("linkedin.com") && !linkedin) {
+        linkedin = link;
+        const clean = title.replace(/\s*[\|·]\s*LinkedIn.*$/i, '');
+        const parts = clean.split(/\s+[\-–|·]\s+/);
+        if (parts.length >= 2) posisi = parts[1].trim();
+      }
+      else if (link.includes("instagram.com") && !instagram) instagram = link;
+      else if (link.includes("facebook.com") && !facebook) facebook = link;
+      else if (link.includes("tiktok.com") && !tiktok) tiktok = link;
+
+      if (!email) {
+        const emailMatch = snippet.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+        if (emailMatch) email = emailMatch[0];
       }
     }
 
+    let akurasi = 0;
+    if (linkedin) akurasi += 70;
+    if (instagram) akurasi += 10;
+    if (facebook) akurasi += 10;
+    if (email) akurasi += 10;
+
     res.json({
-      nama,
-      linkedin,
-      instagram,
-      facebook,
-      tiktok,
-      results_found: !!(linkedin || instagram || facebook || tiktok)
+      nama, linkedin, instagram, facebook, tiktok,
+      email, posisi, akurasi,
+      results_found: !!(linkedin || instagram)
     });
 
   } catch (err) {
-    console.error(`[SerpAPI] Error: ${err.message}`);
-    res.status(500).json({ error: 'Failed to search online.' });
+    res.status(500).json({ error: 'Failed to track.' });
   }
 });
-// --- END NEW LOGIC ---
 
-// Save or update alumni
-app.post('/api/v1/alumni', (req, res) => {
-  const { id_mhs, nama, nim, universitas, prodi, status, jk, jenjang } = req.body;
-  
-  if (!nama || !nim) {
-    return res.status(400).json({ error: 'Nama dan NIM wajib diisi' });
-  }
-
-  const query = `INSERT OR REPLACE INTO alumni (id_mhs, nama, nim, universitas, prodi, status, jk, jenjang, last_tracked) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`;
-  const params = [id_mhs, nama, nim, universitas, prodi, status, jk, jenjang];
-
-  db.run(query, params, function(err) {
-    if (err) {
-      console.error(err.message);
-      return res.status(500).json({ error: err.message });
-    }
-    res.json({ message: 'Alumni berhasil disimpan', id: this.lastID });
-  });
-});
-
-// Alumni database search (kept for legacy support)
-app.get('/api/v1/search/mhs/:keyword/', (req, res) => {
-  const { keyword } = req.params;
-  const { universitas, prodi } = req.query;
-  
-  let query = `SELECT * FROM alumni WHERE (nama LIKE ? OR nim LIKE ?)`;
-  const params = [`%${keyword}%`, `%${keyword}%`];
-
-  if (universitas) {
-    query += ` AND universitas LIKE ?`;
-    params.push(`%${universitas}%`);
-  }
-  if (prodi) {
-    query += ` AND prodi LIKE ?`;
-    params.push(`%${prodi}%`);
-  }
-
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      // Table might not exist yet
-      return res.json([]);
-    }
-    res.json(rows || []);
-  });
-});
-
-// Start server
 app.listen(PORT, () => {
-  console.log(`\n🚀 OSINT Alumni API Server (Real PDDikti) running on http://localhost:${PORT}`);
-  console.log(`📡 Primary source : ${PDDIKTI_PUBLIC_API}`);
-  console.log(`\n⚡ Endpoints:`);
-  console.log(`   Search : http://localhost:${PORT}/api/proxy/pddikti/search/mhs/:keyword`);
-  console.log(`   Detail : http://localhost:${PORT}/api/proxy/pddikti/mhs/detail/:id\n`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
-
-export default app;

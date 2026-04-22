@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { Search, Database, Globe as Linkedin, Camera as Instagram, Share2 as Facebook, Share2 as Tiktok, Globe, ExternalLink, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Database, Globe, Loader2, ChevronLeft, ChevronRight, User, Briefcase, Eye } from 'lucide-react';
 import './ExcelTracker.css';
 
 const ExcelTracker = ({ onSave }) => {
@@ -8,30 +8,21 @@ const ExcelTracker = ({ onSave }) => {
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [trackingId, setTrackingId] = useState(null);
+  const [expandedRow, setExpandedRow] = useState(null);
   
   // Pagination State
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [limit] = useState(10); // Reduced for speed
+  const [limit] = useState(10); // SET TO 10 ROWS
+  const [jumpPage, setJumpPage] = useState('1');
 
   const fetchResults = useCallback(async (searchQuery = query, pageNum = page) => {
-    // Only search if query is long enough or empty (initial load)
-    const isInitialLoad = !searchQuery;
-    const isSearchValid = searchQuery && searchQuery.trim().length >= 3;
-
-    if (!isInitialLoad && !isSearchValid) {
-       return;
-    }
-
     setIsLoading(true);
     try {
-      // BASE QUERY: Only select necessary columns
       let supabaseQuery = supabase
         .from('alumni')
-        .select('id, "Nama Lulusan", "NIM", "Fakultas", "Program Studi", "Tanggal Lulus", "Tahun Masuk", linkedin, instagram, facebook, tiktok', 
-          { count: searchQuery.trim() ? 'planned' : null });
+        .select('*', { count: 'exact' });
 
-      // PERFORMANCE: Skip ILIKE if no search term (Direct range is 100x faster)
       if (searchQuery && searchQuery.trim().length >= 3) {
         supabaseQuery = supabaseQuery.ilike('Nama Lulusan', `%${searchQuery.trim()}%`);
       }
@@ -41,107 +32,105 @@ const ExcelTracker = ({ onSave }) => {
 
       const { data, count, error } = await supabaseQuery
         .range(from, to)
-        .order('id', { ascending: true })
-        .limit(limit);
+        .order('id', { ascending: true });
 
       if (error) throw error;
 
-      // MAP DATA back to UI keys
       const mappedResults = (data || []).map(row => ({
-        id: row.id, // THE REAL DATABASE ID (CRITICAL FIX)
+        id: row.id,
         nama: row['Nama Lulusan'],
         nim: row['NIM'],
         fakultas: row['Fakultas'],
         prodi: row['Program Studi'],
         tahun_lulus: row['Tanggal Lulus'] || row['Tahun Masuk'] || '-',
-        osint: {
-          linkedin: row.linkedin,
-          instagram: row.instagram,
-          facebook: row.facebook,
-          tiktok: row.tiktok
-        },
-        tracked: !!(row.linkedin || row.instagram || row.facebook || row.tiktok)
+        linkedin: row.linkedin || '',
+        instagram: row.instagram || '',
+        facebook: row.facebook || '',
+        tiktok: row.tiktok || '',
+        email: row.email || '',
+        posisi: row.posisi || '',
+        akurasi: row.akurasi || 0,
+        tracked: row.status === 'Tracked'
       }));
 
       setResults(mappedResults);
       if (count !== null) setTotal(count);
     } catch (err) {
-      console.error("Supabase Fetch failed:", err);
-      onSave("Gagal mengambil data dari Supabase online", 'danger');
+      console.error("Fetch failed:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [query, page, limit, onSave]);
+  }, [query, page, limit]);
 
-  // Initial Load
-  useEffect(() => {
-    fetchResults('', 1);
-  }, []);
+  useEffect(() => { fetchResults('', 1); }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
     setPage(1);
+    setJumpPage('1');
     fetchResults(query, 1);
   };
 
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > Math.ceil(total / limit)) return;
+    const totalPages = Math.ceil(total / limit);
+    if (newPage < 1 || newPage > totalPages) return;
     setPage(newPage);
+    setJumpPage(newPage.toString());
     fetchResults(query, newPage);
   };
 
-  const handleTrack = async (item, index) => {
+  const handleJumpPage = (e) => {
+    const val = e.target.value.replace(/[^0-9]/g, ''); // Remove non-numeric
+    setJumpPage(val);
+    const num = parseInt(val);
+    const totalPages = Math.ceil(total / limit);
+    if (!isNaN(num) && num >= 1 && num <= totalPages) {
+      setPage(num);
+      fetchResults(query, num);
+    }
+  };
+
+  const handleTrackClick = async (item, index) => {
     setTrackingId(index);
     const isLocal = window.location.hostname === 'localhost';
-    
     try {
-      const url = isLocal 
-        ? 'http://localhost:8000/api/v1/track/serpapi' 
-        : '/proxy.php?action=track';
-
+      const url = isLocal ? 'http://localhost:8000/api/v1/track/serpapi' : '/proxy.php?action=track';
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nama: item.nama,
-          prodi: item.prodi,
-          fakultas: item.fakultas
-        })
+        body: JSON.stringify({ nama: item.nama })
       });
       
-      if (!response.ok) throw new Error("Proxy error");
       const osintData = await response.json();
+      const updatePayload = {
+        linkedin: osintData.linkedin || null,
+        instagram: osintData.instagram || null,
+        facebook: osintData.facebook || null,
+        tiktok: osintData.tiktok || null,
+        email: osintData.email || null,
+        posisi: osintData.posisi || null,
+        akurasi: osintData.akurasi || 0,
+        status: 'Tracked',
+        last_tracked_at: new Date().toISOString()
+      };
 
-      // OPTIMIZATION: Save findings back to Supabase permanently
-      if (osintData.results_found) {
-        await supabase
-          .from('alumni')
-          .update({
-            linkedin: osintData.linkedin,
-            instagram: osintData.instagram,
-            facebook: osintData.facebook,
-            tiktok: osintData.tiktok,
-            status: 'Tracked'
-          })
-          .eq('id', item.id);
-      }
+      await supabase.from('alumni').update(updatePayload).eq('id', item.id);
       
-      // Update local state to reflect results
       const newResults = [...results];
-      newResults[index] = { ...newResults[index], osint: osintData, tracked: true };
+      newResults[index] = { ...newResults[index], ...updatePayload, tracked: true };
       setResults(newResults);
-      
-      if (osintData.results_found) {
-        onSave(`🎯 Data permanen disimpan untuk ${item.nama}`, 'success');
-      } else {
-        onSave(`⚠️ Tidak ditemukan profil baru untuk ${item.nama}`, 'info');
-      }
     } catch (err) {
-      console.error("Tracking via Proxy failed:", err);
-      onSave("Gagal melacak OSINT (Masalah koneksi ke Proxy)", 'danger');
+      console.error("Tracking failed:", err);
     } finally {
       setTrackingId(null);
     }
+  };
+
+  const getAccuracyColor = (score) => {
+    if (score >= 70) return '#22c55e';
+    if (score >= 40) return '#f59e0b';
+    if (score > 0) return '#ef4444';
+    return '#64748b';
   };
 
   const totalPages = Math.ceil(total / limit);
@@ -152,8 +141,8 @@ const ExcelTracker = ({ onSave }) => {
         <div className="section-header">
           <Database size={24} className="text-accent" />
           <div>
-            <h2>Excel Alumni Lookup</h2>
-            <p>Telusuri basis data 142.000+ alumni (Source: Alumni 2000-2025.xlsx)</p>
+            <h2>Alumni OSINT Tracker</h2>
+            <p>142.1K records (estimated)</p>
           </div>
         </div>
 
@@ -162,137 +151,95 @@ const ExcelTracker = ({ onSave }) => {
             <Search size={20} className="search-icon" />
             <input 
               type="text" 
-              placeholder="Masukkan nama alumni untuk mencari..."
+              placeholder="Cari nama lulusan..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
             <button type="submit" className="btn btn-primary" disabled={isLoading}>
-              {isLoading ? <Loader2 className="animate-spin" /> : 'Cari Data'}
+              Cari Data
             </button>
           </div>
         </form>
       </div>
 
-      <div className="results-section glass-panel animate-fade-in">
-        {results.length > 0 ? (
-          <>
-            <table className="excel-table">
-              <thead>
+      <div className="results-section glass-panel">
+        <table className="excel-table">
+          <thead>
+            <tr>
+              <th>id</th>
+              <th>Nama Lulusan</th>
+              <th>NIM</th>
+              <th>Program Studi</th>
+              <th>Fakultas</th>
+              <th>Akurasi</th>
+              <th>Pekerjaan</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.map((item, index) => (
+              <React.Fragment key={item.id}>
                 <tr>
-                  <th>Nama Alumni (Excel)</th>
-                  <th>Prodi & Fakultas</th>
-                  <th>Tanggal Lulus</th>
-                  <th>Social Media Discovery</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((item, index) => (
-                  <tr key={index}>
-                    <td>
-                      <div className="alumni-name-cell">
-                        <span className="name">{item.nama}</span>
-                        <span className="nim">{item.nim}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="prodi-cell">
-                        <strong>{item.prodi}</strong>
-                        <span>{item.fakultas}</span>
-                      </div>
-                    </td>
-                    <td><span className="year-badge">{item.tahun_lulus}</span></td>
-                    <td>
-                      {item.tracked ? (
-                        <div className="social-links-row">
-                          {item.osint?.linkedin && (
-                            <a href={item.osint.linkedin} target="_blank" rel="noreferrer" className="social-icon l" title="LinkedIn">
-                              <Linkedin size={16} />
-                            </a>
-                          )}
-                          {item.osint?.instagram && (
-                            <a href={item.osint.instagram} target="_blank" rel="noreferrer" className="social-icon i" title="Instagram">
-                              <Instagram size={16} />
-                            </a>
-                          )}
-                          {item.osint?.facebook && (
-                            <a href={item.osint.facebook} target="_blank" rel="noreferrer" className="social-icon f" title="Facebook">
-                              <Facebook size={16} />
-                            </a>
-                          )}
-                          {item.osint?.tiktok && (
-                            <a href={item.osint.tiktok} target="_blank" rel="noreferrer" className="social-icon t" title="TikTok">
-                              <Tiktok size={16} />
-                            </a>
-                          )}
-                          {!item.osint?.results_found && <span className="no-data">Tidak ditemukan</span>}
-                        </div>
-                      ) : (
-                        <span className="pending-discovery">Klik Track untuk mencari...</span>
-                      )}
-                    </td>
-                    <td>
-                      <button 
-                        className={`btn btn-sm ${item.tracked ? 'btn-outline' : 'btn-success'}`}
-                        onClick={() => handleTrack(item, index)}
-                        disabled={trackingId === index}
-                      >
-                        {trackingId === index ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <><Globe size={14} /> {item.tracked ? 'Cari Ulang' : 'Track'}</>
-                        )}
+                  <td className="text-muted">{ (page - 1) * limit + index + 1 }</td>
+                  <td><div className="alumni-name-cell"><span className="name">{item.nama}</span></div></td>
+                  <td><span className="text-muted">{item.nim}</span></td>
+                  <td>{item.prodi}</td>
+                  <td>{item.fakultas}</td>
+                  <td>
+                    <div className="accuracy-cell">
+                      <span className="accuracy-text" style={{ color: getAccuracyColor(item.akurasi) }}>{item.akurasi}%</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span className="text-muted">{item.posisi || '—'}</span>
+                  </td>
+                  <td>
+                    {!item.tracked ? (
+                      <button className="btn btn-sm btn-primary" onClick={() => handleTrackClick(item, index)} disabled={trackingId === index}>
+                        {trackingId === index ? <Loader2 size={14} className="animate-spin" /> : 'Lacak'}
                       </button>
+                    ) : (
+                      <button className="btn btn-sm btn-outline" onClick={() => setExpandedRow(expandedRow === index ? null : index)}>
+                        <Eye size={14} /> Detail
+                      </button>
+                    )}
+                  </td>
+                </tr>
+                {expandedRow === index && (
+                  <tr className="detail-row">
+                    <td colSpan="8">
+                      <div className="detail-grid animate-slide-down">
+                        <div className="detail-section">
+                          <h4><User size={14} /> Info Lacak</h4>
+                          <p className="detail-item"><span className="detail-label">Email:</span> {item.email || '-'}</p>
+                          {item.linkedin && <a href={item.linkedin} target="_blank" className="detail-link">🔗 LinkedIn</a>}
+                          {item.instagram && <a href={item.instagram} target="_blank" className="detail-link">📷 Instagram</a>}
+                        </div>
+                        <div className="detail-section">
+                          <h4><Briefcase size={14} /> Karir</h4>
+                          <p className="detail-item"><span className="detail-label">Posisi:</span> {item.posisi || '-'}</p>
+                        </div>
+                      </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
 
-            <div className="pagination-controls">
-              <div className="pagination-info">
-                Menampilkan <strong>{(page - 1) * limit + 1} - {Math.min(page * limit, total)}</strong> dari <strong>{total.toLocaleString()}</strong> alumni
-              </div>
-              <div className="pagination-buttons">
-                <button 
-                  className="page-btn" 
-                  onClick={() => handlePageChange(page - 1)} 
-                  disabled={page === 1 || isLoading}
-                >
-                  <ChevronLeft size={16} /> Prev
-                </button>
-                <div className="page-indicator">
-                  Halaman <strong>{page}</strong> dari <strong>{totalPages}</strong>
-                </div>
-                <button 
-                  className="page-btn" 
-                  onClick={() => handlePageChange(page + 1)} 
-                  disabled={page === totalPages || isLoading}
-                >
-                  Next <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="empty-results">
-            {isLoading ? (
-              <div className="loading-state">
-                <Loader2 className="animate-spin mb-2" size={32} />
-                <p>Mengambil data alumni...</p>
-              </div>
-            ) : (
-              <>
-                <Database size={40} className="text-muted mb-2" />
-                <p>Tidak ada hasil untuk "<strong>{query}</strong>" di database Excel.</p>
-              </>
-            )}
+        <div className="pagination-controls">
+          <div className="pagination-info">
+            Page <strong>{page}</strong> of <strong>{totalPages}</strong>
           </div>
-        )}
-      </div>
-
-      <div className="collection-disclaimer">
-         <p>🔍 <strong>Disclaimer OSINT:</strong> Pencarian dilakukan menggunakan SerpAPI berdasarkan data Excel. Hasil bervariasi tergantung ketersediaan profil publik.</p>
+          <div className="pagination-buttons">
+            <button className="page-btn" onClick={() => handlePageChange(page - 1)} disabled={page === 1}><ChevronLeft size={16} /></button>
+            <div className="page-jump">
+              Halaman <input type="text" value={jumpPage} onChange={handleJumpPage} />
+            </div>
+            <button className="page-btn" onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages}><ChevronRight size={16} /></button>
+          </div>
+        </div>
       </div>
     </div>
   );

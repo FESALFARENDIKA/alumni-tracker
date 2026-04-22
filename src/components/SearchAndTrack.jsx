@@ -217,7 +217,15 @@ const SearchAndTrack = ({ onResult, onSave }) => {
           "Fakultas": alumniData.universitas,
           "Tahun Masuk": alumniData.tahun_masuk || '-',
           "Tanggal Lulus": alumniData.tahun_lulus || '-',
-          "status": 'Tracked'
+          "status": 'Tracked',
+          "email": alumniData.email || null,
+          "no_hp": alumniData.no_hp || null,
+          "tempat_kerja": alumniData.tempat_kerja || null,
+          "alamat_kerja": alumniData.alamat_kerja || null,
+          "posisi": alumniData.posisi || null,
+          "jenis_pekerjaan": alumniData.jenis_pekerjaan || null,
+          "akurasi": alumniData.akurasi || 0,
+          "last_tracked_at": new Date().toISOString()
         }, { onConflict: 'NIM' });
 
       if (error) throw error;
