@@ -67,15 +67,20 @@ const AlumniTable = ({ onReview, showAll = true, filterStatus: initialFilterStat
     setActiveDetailId(id_mhs);
     setIsFetchingDetail(true);
     
-    const API_BASE = '/proxy.php';
+    const isLocal = window.location.hostname === 'localhost';
     
     try {
-      const response = await fetch(`${API_BASE}?action=pddikti_detail&id=${id_mhs}`);
+      const url = isLocal 
+        ? `http://localhost:8000/api/proxy/pddikti/mhs/detail/${id_mhs}` 
+        : `/proxy.php?action=pddikti_detail&id=${id_mhs}`;
+
+      const response = await fetch(url);
       const data = await response.json();
       setDetailedMhs(data);
     } catch (err) {
       console.error("Failed to fetch student details:", err);
-      alert("Gagal mengambil detail dari PDDikti via PHP Proxy.");
+      const errorMsg = isLocal ? "Gagal terhubung ke Node Server lokal." : "Gagal terhubung ke PHP Proxy.";
+      alert(`Gagal mengambil detail dari PDDikti. ${errorMsg}`);
       setActiveDetailId(null);
     } finally {
       setIsFetchingDetail(false);

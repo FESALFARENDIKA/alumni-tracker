@@ -48,6 +48,7 @@ const ExcelTracker = ({ onSave }) => {
 
       // MAP DATA back to UI keys
       const mappedResults = (data || []).map(row => ({
+        id: row.id, // THE REAL DATABASE ID (CRITICAL FIX)
         nama: row['Nama Lulusan'],
         nim: row['NIM'],
         fakultas: row['Fakultas'],
@@ -91,10 +92,14 @@ const ExcelTracker = ({ onSave }) => {
 
   const handleTrack = async (item, index) => {
     setTrackingId(index);
-    const API_BASE = '/proxy.php';
+    const isLocal = window.location.hostname === 'localhost';
     
     try {
-      const response = await fetch(`${API_BASE}?action=track`, {
+      const url = isLocal 
+        ? 'http://localhost:8000/api/v1/track/serpapi' 
+        : '/proxy.php?action=track';
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -118,7 +123,7 @@ const ExcelTracker = ({ onSave }) => {
             tiktok: osintData.tiktok,
             status: 'Tracked'
           })
-          .eq('NIM', item.nim);
+          .eq('id', item.id);
       }
       
       // Update local state to reflect results

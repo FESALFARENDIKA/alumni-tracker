@@ -1,4 +1,5 @@
 import { useState, Fragment } from 'react';
+import { supabase } from '../supabaseClient';
 import { 
   Search, 
   Radar, 
@@ -102,11 +103,9 @@ const SearchAndTrack = ({ onResult, onSave }) => {
       setScanningStatus('Inisialisasi Radar Sistem...');
       setProgress(20);
       
-      // --- PDDIKTI SEARCH via PHP PROXY ---
+      // --- SMART API SELECTOR ---
+      const isLocal = window.location.hostname === 'localhost';
       const keyword = (searchForm.nama || searchForm.nim || '').trim();
-      // Using relative path for the PHP proxy on the same server
-      const API_BASE = '/proxy.php';
-      console.log('PDDikti search keyword:', keyword);
       
       setSourceStatus({
         pddikti: 'scanning'
@@ -114,27 +113,45 @@ const SearchAndTrack = ({ onResult, onSave }) => {
       
       setScanningStatus('Radar PDDikti Aktif...');
       
-      const queryParams = new URLSearchParams({
-        action: 'pddikti',
-        keyword: keyword,
-        universitas: searchForm.universitas || '',
-        prodi: searchForm.prodi || ''
-      });
-      
       try {
-        const response = await fetch(`${API_BASE}?${queryParams.toString()}`);
+        let response;
+        if (isLocal) {
+          // Local Node.js Server for Development
+          const queryParams = new URLSearchParams({
+            universitas: searchForm.universitas || '',
+            prodi: searchForm.prodi || ''
+          });
+          response = await fetch(`http://localhost:8000/api/proxy/pddikti/search/mhs/${encodeURIComponent(keyword)}?${queryParams.toString()}`);
+        } else {
+          // InfinityFree PHP Proxy for Production
+          const queryParams = new URLSearchParams({
+            action: 'pddikti',
+            keyword: keyword,
+            universitas: searchForm.universitas || '',
+            prodi: searchForm.prodi || ''
+          });
+          response = await fetch(`/proxy.php?${queryParams.toString()}`);
+        }
         
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
-        const results = data.map(item => ({
+        
+        // --- SMART EXTRACTION: Check for direct array or .mahasiswa property ---
+        const rawList = Array.isArray(data) ? data : (data.mahasiswa && Array.isArray(data.mahasiswa) ? data.mahasiswa : []);
+        
+        const results = rawList.map(item => ({
           sumber: 'PDDikti',
           confidence: 0.9,
           data: item
         }));
         
+        if (results.length === 0) {
+           console.log("No students found in response:", data);
+        }
+
         console.log(`✅ PDDikti: ${results.length} results found`);
         setProgress(100);
         setSourceStatus({
@@ -158,20 +175,6 @@ const SearchAndTrack = ({ onResult, onSave }) => {
           pddikti: 'error'
         });
         throw err;
-      }
-      
-      setProgress(100);
-      setSearchResults({ 
-        results: results,
-        results_count: results.length,
-        confidence: results.length > 0 ? 0.8 : 0
-      });
-
-      if (onResult) {
-        onResult({ 
-          results: results,
-          results_count: results.length 
-        });
       }
     } catch (err) {
       console.error('Search error:', err);
