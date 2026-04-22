@@ -1,66 +1,63 @@
 # Alumni Tracker - OSINT Environment
 
-[![Live Web](https://img.shields.io/badge/Live-Web%20App-brightgreen)](http://alumni-tracker.infinityfreeapp.com)
-[![Database](https://img.shields.io/badge/Database-Supabase-blue)](https://supabase.com)
-[![OSINT](https://img.shields.io/badge/OSINT-SerpAPI-orange)](https://serpapi.com)
-
-Alumni Tracker adalah sistem pemantauan dan pelacakan alumni berbasis intelijen sumber terbuka (OSINT) yang dirancang untuk mengelola lebih dari 142.000 data alumni. Sistem ini mengintegrasikan basis data dengan pencarian profil media sosial secara otomatis menggunakan SerpAPI dan menyimpan hasil pelacakan pada basis data cloud Supabase.
+Alumni Tracker merupakan sistem pemantauan dan pelacakan alumni berbasis Intelijen Sumber Terbuka (OSINT) yang dirancang untuk mengelola serta memvalidasi data alumni dalam skala besar (142.000+ records). Sistem ini mengintegrasikan basis data akademik dengan mesin pencari profil digital secara otomatis untuk mendukung pemutakhiran data karier dan domisili alumni secara real-time.
 
 ## Fitur Utama
 
-- **Alumni Tracker**: Pencarian nama alumni yang komprehensif didukung oleh pemrosesan data asinkron. Fitur ini memungkinkan ekstraksi otomatis informasi karir (posisi, tempat kerja), kontak (email, nomor telepon), serta profil media sosial (LinkedIn, Instagram, Facebook, TikTok).
-- **Track Pendidikan (PDDIKTI)**: Modul pencarian dan verifikasi data riwayat studi akademik secara real-time yang terhubung langsung ke Pangkalan Data Pendidikan Tinggi (PDDIKTI) Kementerian Pendidikan dan Kebudayaan.
-- **Summary Alumni**: Dasbor analitik interaktif yang menampilkan statistik pelacakan secara dinamis langsung dari data Supabase, mencakup rasio penemuan data dan progres pelacakan per tahun kelulusan.
-- **Hasil Tracking**: Antarmuka tabular yang komprehensif untuk meninjau secara mendetail data alumni yang telah berhasil dilacak.
+- **Alumni Tracker**: Modul pencarian berbasis data Excel yang mendukung pelacakan otomatis profil profesional, kontak, dan posisi pekerjaan melalui integrasi API pihak ketiga.
+- **Track Pendidikan (PDDIKTI)**: Fitur verifikasi status mahasiswa dan riwayat studi yang terhubung melalui jalur proxy ke Pangkalan Data Pendidikan Tinggi.
+- **Summary Alumni**: Dasbor analitik untuk memvisualisasikan progres pelacakan, rasio penemuan data, dan distribusi alumni berdasarkan tahun kelulusan secara dinamis.
+- **Hasil Tracking**: Manajemen basis data cloud yang menyimpan informasi detail hasil ekstraksi OSINT untuk keperluan validasi lanjutan.
+
+## Akun Akses Demonstrasi
+
+Gunakan kredensial berikut untuk mengakses antarmuka administrasi:
+
+- **Username**: ffarenadmin229#
+- **Password**: isaladmin992@
+
+## Pengujian Kualitas (Quality Assurance)
+
+Berikut adalah tabel hasil pengujian sistem berdasarkan aspek kualitas yang telah ditentukan pada fase desain:
+
+| Aspek Kualitas | Kasus Uji | Hasil yang Diharapkan | Status |
+|---|---|---|---|
+| Keamanan (Security) | Akses halaman admin tanpa autentikasi | Sistem melakukan proteksi dan mengarahkan pengguna kembali ke halaman login | Berhasil |
+| Integritas Data | Pencarian nama spesifik dari 142k data | Sistem menampilkan informasi yang akurat sesuai dengan record pada basis data Excel | Berhasil |
+| Keandalan (Reliability) | Ekstraksi data OSINT melalui SerpAPI | Sistem berhasil mendapatkan link profil publik (LinkedIn/IG) dan melakukan parsing data karier | Berhasil |
+| Efisiensi Performa | Transisi halaman pada volume data besar | Fitur pagination mampu merespons navigasi data dalam waktu di bawah 1 detik | Berhasil |
+| Usabilitas (Usability) | Responsivitas antarmuka pada berbagai perangkat | Elemen UI menyesuaikan tata letak secara proporsional pada resolusi desktop maupun mobile | Berhasil |
 
 ## Arsitektur Sistem
 
-- **Frontend**: React.js (Vite), komponen Recharts untuk visualisasi data, Lucide Icons, Vanilla CSS dengan pendekatan desain modern (Glassmorphism).
-- **Backend & Integrasi API**: Node.js (Express) untuk proxy API PDDikti dan pemrosesan SerpAPI.
-- **Database**: Supabase (PostgreSQL) untuk penyimpanan data hasil OSINT.
-- **Deployment**: InfinityFree (Static Hosting) dengan integrasi proxy PHP.
+- **Frontend**: React.js (Vite), Recharts (Visualisasi Data), Lucide Icons, Vanilla CSS.
+- **Database**: Supabase (PostgreSQL) sebagai penyimpanan cloud utama.
+- **Backend & Proxy**: Node.js (Express) untuk menangani komunikasi API eksternal dan bypass CORS.
+- **OSINT Provider**: SerpAPI untuk otomatisasi pencarian pada mesin pencari Google.
 
-## Panduan Instalasi & Menjalankan Aplikasi
+## Panduan Instalasi Lokal
 
-### Persyaratan Sistem
-- Node.js dan npm
-- Akun Supabase (PostgreSQL)
-- Kunci API SerpAPI (untuk modul OSINT)
-
-### Instalasi Lokal
-1. Klon repositori ini:
+1. Klon repositori:
    ```bash
    git clone https://github.com/FESALFARENDIKA/alumni-tracker.git
-   cd alumni-tracker
    ```
-2. Instal dependensi:
+2. Instalasi dependensi:
    ```bash
    npm install
    ```
-3. Konfigurasi kredensial lingkungan di `.env`:
+3. Konfigurasi variabel lingkungan (.env):
    ```bash
-   VITE_SUPABASE_URL=URL_SUPABASE_ANDA
-   VITE_SUPABASE_ANON_KEY=KEY_SUPABASE_ANDA
+   VITE_SUPABASE_URL=YOUR_SUPABASE_URL
+   VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_KEY
    ```
-4. Jalankan server backend (untuk proxy API PDDikti & OSINT):
-   ```bash
-   npm run server
-   ```
-   *Atau*
+4. Menjalankan server backend:
    ```bash
    node server.js
    ```
-5. Jalankan aplikasi frontend (pada terminal yang berbeda):
+5. Menjalankan aplikasi frontend:
    ```bash
    npm run dev
    ```
 
-## Catatan Rilis
-
-- Pembaruan penamaan navigasi antarmuka untuk standardisasi produk ("Excel Search" menjadi "Alumni Tracker", "Radar Board" menjadi "Summary Alumni").
-- Sinkronisasi modul Hasil Tracking dan Summary Alumni agar membaca langsung dari tabel database (Supabase), mencegah galat (error) pada panggilan API PDDikti ganda.
-- Penyesuaian antarmuka pengguna untuk menampilkan informasi OSINT secara lebih rinci (email, nomor kontak, dan riwayat pekerjaan).
-- Perbaikan rute proxy pada Node Server lokal untuk memulihkan integrasi ke PDDikti.
-
 ---
-**DISCLAIMER:** Sistem ini dikembangkan untuk keperluan akademik dan penelitian intelijen sumber terbuka. Seluruh data yang diproses harus dijaga kerahasiaannya sesuai regulasi privasi yang berlaku dan dilarang disalahgunakan untuk keperluan komersial tanpa izin.
+**Pernyataan Penyangkalan (Disclaimer):** Sistem ini dikembangkan untuk tujuan akademik dan riset teknologi informasi. Penggunaan data harus mematuhi regulasi privasi yang berlaku dan dilarang digunakan untuk kepentingan komersial tanpa persetujuan pihak terkait.
