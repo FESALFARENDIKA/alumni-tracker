@@ -304,3 +304,47 @@
 .detail-value { color: #e2e8f0; font-size: 0.85rem; font-weight: 500; }
 .detail-link { color: #3ecf8e; text-decoration: none; font-size: 0.85rem; display: block; margin-bottom: 8px; }
 .detail-link:hover { text-decoration: underline; }
+
+/* SPINNER ANIMATION */
+.spinner-icon {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.track-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 85px;
+  justify-content: center;
+}
+
+.track-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* SLIDE DOWN ANIMATION */
+.animate-slide-down {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* FADE IN ANIMATION */
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

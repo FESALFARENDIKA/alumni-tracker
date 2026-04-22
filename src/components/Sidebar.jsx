@@ -4,10 +4,10 @@ import './Sidebar.css';
 
 const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
   const menuItems = [
+    { id: 'excel', icon: Database, label: 'Alumni Tracker' },
+    { id: 'search', icon: Search, label: 'Track Pendidikan (PDDIKTI)' },
     { id: 'dashboard', icon: Radar, label: 'Radar Board' },
-    { id: 'alumni', icon: Users, label: 'Hasil Tracking' },
-    { id: 'search', icon: Search, label: 'Search & Track' },
-    { id: 'excel', icon: Database, label: 'Excel Search & Track' }
+    { id: 'alumni', icon: Users, label: 'Hasil Tracking' }
   ];
 
   return (

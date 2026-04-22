@@ -11,7 +11,7 @@ import { CircleCheck as CheckCircle, CircleX as XCircle, Info } from 'lucide-rea
 import './App.css';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('search');
+  const [activeTab, setActiveTab] = useState('excel');
   const [isAuthenticated, setIsAuthenticated] = useState(
     localStorage.getItem('isLoggedIn') === 'true'
   );
