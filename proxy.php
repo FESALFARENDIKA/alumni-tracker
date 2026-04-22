@@ -19,15 +19,16 @@ $action = $_GET['action'] ?? "";
 // --- 1. PDDIKTI SEARCH ---
 if ($action === 'pddikti') {
     $keyword = $_GET['keyword'] ?? "";
-    $url = "https://api-frontend.kemdikbud.go.id/search_mhs";
-    $post_data = json_encode(["nama" => $keyword, "nipnim" => $keyword]);
+    $url = "https://api-pddikti.kemdiktisaintek.go.id/pencarian/mhs/" . rawurlencode($keyword);
     
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Accept: application/json',
+        'Origin: https://pddikti.kemdiktisaintek.go.id',
+        'Referer: https://pddikti.kemdiktisaintek.go.id/',
+        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    ]);
     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     
