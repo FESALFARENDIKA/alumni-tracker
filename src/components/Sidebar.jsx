@@ -6,7 +6,7 @@ const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
   const menuItems = [
     { id: 'excel', icon: Database, label: 'Alumni Tracker' },
     { id: 'search', icon: Search, label: 'Track Pendidikan (PDDIKTI)' },
-    { id: 'dashboard', icon: Radar, label: 'Radar Board' },
+    { id: 'dashboard', icon: Radar, label: 'Summary Alumni' },
     { id: 'alumni', icon: Users, label: 'Hasil Tracking' }
   ];
 

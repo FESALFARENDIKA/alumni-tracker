@@ -143,6 +143,70 @@ app.post('/api/v1/track/serpapi', async (req, res) => {
   }
 });
 
+// 🔎 PDDikti Proxy - Search Mahasiswa
+async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    return res;
+  } catch (err) {
+    clearTimeout(id);
+    throw err;
+  }
+}
+
+app.get('/api/proxy/pddikti/search/mhs/:keyword', async (req, res) => {
+  const keyword = decodeURIComponent(req.params.keyword);
+  try {
+    const url = `${PDDIKTI_PUBLIC_API}/pencarian/mhs/${encodeURIComponent(keyword)}`;
+    const headers = {
+      'Accept': 'application/json',
+      'Origin': 'https://pddikti.kemdiktisaintek.go.id',
+      'Referer': 'https://pddikti.kemdiktisaintek.go.id/',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    };
+    const resp = await fetchWithTimeout(url, { headers }, 8000);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    let results = Array.isArray(data) ? data : (data?.mahasiswa || data?.data || [data]);
+    results = results.map(item => ({
+      id_mhs: item.id || item.id_mhs || item.mahasiswa_id || '',
+      nama: item.nama || item.nm_mhs || '',
+      nim: item.nim || item.nipd || '',
+      nama_pt: item.nama_pt || item.pt || '',
+      nama_prodi: item.nama_prodi || item.prodi || '',
+      jenjang: item.jenjang || 'S1',
+      ...item
+    }));
+    res.json(results);
+  } catch (err) {
+    res.status(503).json({ error: 'PDDikti API tidak tersedia', message: err.message });
+  }
+});
+
+app.get('/api/proxy/pddikti/mhs/detail/:id', async (req, res) => {
+  const id = req.params.id;
+  try {
+    const url = `${PDDIKTI_PUBLIC_API}/detail/mhs/${id}`;
+    const headers = {
+      'Accept': 'application/json',
+      'Origin': 'https://pddikti.kemdiktisaintek.go.id',
+      'Referer': 'https://pddikti.kemdiktisaintek.go.id/',
+      'User-Agent': 'Mozilla/5.0'
+    };
+    const resp = await fetchWithTimeout(url, { headers }, 8000);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    res.json({ ...data, data });
+  } catch (err) {
+    res.status(503).json({ error: 'PDDikti API tidak tersedia', message: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`📡 PDDikti: ${PDDIKTI_PUBLIC_API}`);
 });

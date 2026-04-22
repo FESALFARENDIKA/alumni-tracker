@@ -1,292 +1,210 @@
 import { supabase } from '../supabaseClient';
 import { useState, useEffect, Fragment } from 'react';
-import { Filter, Search, CircleCheck as CheckCircle, Clock, Database, BookOpen } from 'lucide-react';
+import { Filter, Search, CheckCircle, Database, Eye, User, Briefcase, Mail, Phone, MapPin, Building, ChevronLeft, ChevronRight } from 'lucide-react';
 import './AlumniTable.css';
 
-const AlumniTable = ({ onReview, showAll = true, filterStatus: initialFilterStatus = 'All', title = 'Hasil Tracking' }) => {
-  const [filterStatus, setFilterStatus] = useState(initialFilterStatus);
-  const [filterYear, setFilterYear] = useState('All');
+const AlumniTable = ({ onTrack, showAll = true, title = 'Hasil Tracking' }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [alumniData, setAlumniData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeDetailId, setActiveDetailId] = useState(null);
-  const [detailedMhs, setDetailedMhs] = useState(null);
-  const [isFetchingDetail, setIsFetchingDetail] = useState(false);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 10;
 
-  useEffect(() => {
-    fetchAlumni();
-  }, []);
+  useEffect(() => { fetchTracked('', 1); }, []);
 
-  const fetchAlumni = async () => {
+  const fetchTracked = async (search = '', pageNum = 1) => {
     setIsLoading(true);
     try {
-      // Fetch only "Tracked" alumni (those that have at least one social link)
-      const { data, error } = await supabase
+      let query = supabase
         .from('alumni')
-        .select('*')
-        .or('linkedin.not.is.null,instagram.not.is.null,facebook.not.is.null,tiktok.not.is.null')
-        .order('created_at', { ascending: false });
+        .select('*', { count: 'exact' })
+        .eq('status', 'Tracked');
+
+      if (search && search.trim().length >= 2) {
+        query = query.ilike('Nama Lulusan', `%${search.trim()}%`);
+      }
+
+      const from = (pageNum - 1) * limit;
+      const { data, count, error } = await query
+        .range(from, from + limit - 1)
+        .order('last_tracked_at', { ascending: false });
 
       if (error) throw error;
 
-      // Map Supabase columns to frontend format
-      const mappedData = (data || []).map(row => ({
+      setAlumniData((data || []).map(row => ({
         id: row.id,
-        id_mhs: row.nim || row.id.toString(), // PDDikti ID or UID
         nama: row['Nama Lulusan'],
         nim: row['NIM'],
-        tahun_lulus: row['Tanggal Lulus'] || row['Tahun Masuk'] || '-',
         prodi: row['Program Studi'],
-        universitas: row['Fakultas'],
-        status: 'Tracked',
-        confidenceScore: 95
-      }));
-
-      setAlumniData(mappedData);
+        fakultas: row['Fakultas'],
+        tahun_lulus: row['Tanggal Lulus'] || '-',
+        linkedin: row.linkedin || '',
+        instagram: row.instagram || '',
+        facebook: row.facebook || '',
+        tiktok: row.tiktok || '',
+        email: row.email || '',
+        no_hp: row.no_hp || '',
+        tempat_kerja: row.tempat_kerja || '',
+        alamat_kerja: row.alamat_kerja || '',
+        posisi: row.posisi || '',
+        jenis_pekerjaan: row.jenis_pekerjaan || '',
+        sosmed_perusahaan: row.sosmed_perusahaan || '',
+        akurasi: row.akurasi || 0,
+        last_tracked_at: row.last_tracked_at || ''
+      })));
+      if (count !== null) setTotal(count);
     } catch (err) {
-      console.error("Supabase fetch alumni failed:", err);
+      console.error("Fetch tracked alumni failed:", err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleFetchDetail = async (id_mhs) => {
-    if (!id_mhs) {
-      alert("ID Mahasiswa tidak ditemukan.");
-      return;
-    }
-    
-    // Toggle off if already viewing this student's detail
-    if (activeDetailId === id_mhs) {
-      setActiveDetailId(null);
-      setDetailedMhs(null);
-      return;
-    }
-
-    setDetailedMhs(null); // Reset detail while loading new one
-    setActiveDetailId(id_mhs);
-    setIsFetchingDetail(true);
-    
-    const isLocal = window.location.hostname === 'localhost';
-    
-    try {
-      const url = isLocal 
-        ? `http://localhost:8000/api/proxy/pddikti/mhs/detail/${id_mhs}` 
-        : `/proxy.php?action=pddikti_detail&id=${id_mhs}`;
-
-      const response = await fetch(url);
-      const data = await response.json();
-      setDetailedMhs(data);
-    } catch (err) {
-      console.error("Failed to fetch student details:", err);
-      const errorMsg = isLocal ? "Gagal terhubung ke Node Server lokal." : "Gagal terhubung ke PHP Proxy.";
-      alert(`Gagal mengambil detail dari PDDikti. ${errorMsg}`);
-      setActiveDetailId(null);
-    } finally {
-      setIsFetchingDetail(false);
-    }
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setPage(1);
+    fetchTracked(searchTerm, 1);
   };
 
-  // Derive unique years for filter
-  const uniqueYears = [...new Set(alumniData.map(item => {
-    // Try to extract year from various fields if not explicitly provided
-    return item.tahun_lulus || (item.nim ? "20" + item.nim.substring(0, 2) : 2024);
-  }))].sort((a, b) => b - a);
-
-  // Filter Logic
-  const filteredData = alumniData.filter(item => {
-    // Database returns 'nama' and 'status'
-    const statusVal = item.status || 'Tracked';
-    const nameVal = item.nama || item.name || '';
-    const nimVal = item.nim || '';
-    const yearVal = item.tahun_lulus || (item.nim ? "20" + item.nim.substring(0, 2) : 2024);
-
-    const matchStatus = filterStatus === 'All' || statusVal === filterStatus;
-    const matchYear = filterYear === 'All' || yearVal.toString() === filterStatus; // Corrected to use yearVal
-    const matchSearch = nameVal.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      nimVal.includes(searchTerm);
-    return matchStatus && matchSearch; // Simplified year match for now since schema is evolving
-  });
-
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'Tracked':
-        return <span className="badge badge-success"><CheckCircle size={12} className="mr-1" /> Tracked</span>;
-      case 'Untracked':
-        return <span className="badge badge-danger">Untracked</span>;
-      case 'Pending Validation':
-        return <span className="badge badge-warning"><Clock size={12} className="mr-1" /> Pending</span>;
-      default:
-        return <span className="badge">{status}</span>;
-    }
+  const handlePageChange = (newPage) => {
+    const totalPages = Math.ceil(total / limit);
+    if (newPage < 1 || newPage > totalPages) return;
+    setPage(newPage);
+    fetchTracked(searchTerm, newPage);
   };
 
-  const getConfidenceColor = (score) => {
-    if (score >= 90) return 'text-success';
-    if (score >= 60) return 'text-warning';
-    return 'text-danger';
+  const getAccuracyColor = (score) => {
+    if (score >= 70) return '#22c55e';
+    if (score >= 40) return '#f59e0b';
+    if (score > 0) return '#ef4444';
+    return '#64748b';
   };
+
+  const totalPages = Math.ceil(total / limit);
 
   return (
     <div className="alumni-table-container animate-fade-in">
       <div className="page-header">
         <h1>{title}</h1>
-        <p>Database hasil pelacakan alumni secara menyeluruh</p>
+        <p>Menampilkan {total} alumni yang sudah berhasil dilacak</p>
       </div>
 
-      {/* Table Controls (Filters & Search) */}
       <div className="table-controls glass-panel">
-        <div className="filter-group">
-          <Filter size={18} className="text-muted" />
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="filter-select"
-            disabled={!showAll}
-          >
-            <option value="All">All Statuses</option>
-            <option value="Tracked">Tracked</option>
-            <option value="Untracked">Untracked</option>
-            <option value="Pending Validation">Pending Validation</option>
-          </select>
-
-          <select
-            value={filterYear}
-            onChange={(e) => setFilterYear(e.target.value)}
-            className="filter-select"
-          >
-            <option value="All">All Years</option>
-            {uniqueYears.map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="search-box">
+        <form onSubmit={handleSearch} className="search-box">
           <Search size={16} />
           <input
             type="text"
-            placeholder="Search Name or NIM..."
+            placeholder="Cari nama alumni yang sudah dilacak..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-        </div>
+          <button type="submit" className="btn btn-sm btn-primary">Cari</button>
+        </form>
       </div>
 
-      {/* Main Table */}
       <div className="table-wrapper glass-panel">
         <table className="data-table">
           <thead>
             <tr>
+              <th>#</th>
+              <th>Nama Lulusan</th>
               <th>NIM</th>
-              <th>Alumni Name</th>
-              <th>Grad Year</th>
-              <th>Extracted Current Job</th>
-              <th>Company</th>
-              <th>Confidence</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th>Prodi</th>
+              <th>Akurasi</th>
+              <th>Posisi/Pekerjaan</th>
+              <th>Sosmed</th>
+              <th>Aksi</th>
             </tr>
           </thead>
           <tbody>
-            {filteredData.length > 0 ? (
-              filteredData.map((row, idx) => {
-                const hasDetail = activeDetailId === row.id_mhs && detailedMhs;
-                
-                return (
-                  <Fragment key={row.id || idx}>
-                    <tr>
-                      <td className="font-mono text-muted">{row.nim}</td>
-                      <td className="font-semibold">{row.nama || row.name}</td>
-                      <td>{row.tahun_lulus || row.graduationYear || '-'}</td>
-                      <td>{row.prodi || row.extractedJob || '-'}</td>
-                      <td>{row.universitas || row.extractedCompany || '-'}</td>
-                      <td className={`font-bold ${getConfidenceColor(row.confidenceScore || 90)}`}>
-                        {row.confidenceScore || 100}%
-                      </td>
-                      <td>{getStatusBadge(row.status || 'Tracked')}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '5px' }}>
-                          <button
-                            className="btn btn-outline btn-sm action-review-btn"
-                            onClick={() => handleFetchDetail(row.id_mhs)}
-                            disabled={isFetchingDetail || !row.id_mhs}
-                          >
-                            <BookOpen size={14} className="mr-1" /> 
-                            {isFetchingDetail && !hasDetail ? '...' : (hasDetail ? 'Tutup' : 'Detail')}
-                          </button>
+            {isLoading ? (
+              <tr><td colSpan="8" className="empty-state">Memuat data...</td></tr>
+            ) : alumniData.length === 0 ? (
+              <tr><td colSpan="8" className="empty-state">Belum ada alumni yang dilacak. Gunakan Alumni Tracker untuk mulai melacak.</td></tr>
+            ) : (
+              alumniData.map((row, idx) => (
+                <Fragment key={row.id}>
+                  <tr>
+                    <td className="text-muted">{(page - 1) * limit + idx + 1}</td>
+                    <td className="font-semibold">{row.nama}</td>
+                    <td className="font-mono text-muted">{row.nim}</td>
+                    <td>{row.prodi}</td>
+                    <td>
+                      <span className="font-bold" style={{ color: getAccuracyColor(row.akurasi) }}>
+                        {row.akurasi}%
+                      </span>
+                    </td>
+                    <td>{row.posisi || '—'}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        {row.linkedin && <span className="mini-badge li">in</span>}
+                        {row.instagram && <span className="mini-badge ig">ig</span>}
+                        {row.facebook && <span className="mini-badge fb">fb</span>}
+                        {row.tiktok && <span className="mini-badge tt">tt</span>}
+                        {!row.linkedin && !row.instagram && !row.facebook && !row.tiktok && <span className="text-muted">—</span>}
+                      </div>
+                    </td>
+                    <td>
+                      <button
+                        className="btn btn-outline btn-sm"
+                        onClick={() => setExpandedRow(expandedRow === idx ? null : idx)}
+                      >
+                        <Eye size={14} /> {expandedRow === idx ? 'Tutup' : 'Detail'}
+                      </button>
+                    </td>
+                  </tr>
+
+                  {expandedRow === idx && (
+                    <tr className="detail-expanded-row" style={{ backgroundColor: 'rgba(5, 10, 24, 0.4)' }}>
+                      <td colSpan="8" style={{ padding: '1.5rem' }}>
+                        <div className="tracked-detail-grid">
+                          <div className="tracked-detail-section">
+                            <h5><User size={14} /> Sosial Media & Kontak</h5>
+                            <div className="social-links-row" style={{ marginBottom: 12 }}>
+                              {row.linkedin ? <a href={row.linkedin} target="_blank" rel="noreferrer" className="social-icon l">in</a> : null}
+                              {row.instagram ? <a href={row.instagram} target="_blank" rel="noreferrer" className="social-icon i">ig</a> : null}
+                              {row.facebook ? <a href={row.facebook} target="_blank" rel="noreferrer" className="social-icon f">fb</a> : null}
+                              {row.tiktok ? <a href={row.tiktok} target="_blank" rel="noreferrer" className="social-icon t">tt</a> : null}
+                            </div>
+                            <div className="detail-field"><Mail size={13} /> <span>Email:</span> <strong>{row.email || '-'}</strong></div>
+                            <div className="detail-field"><Phone size={13} /> <span>No HP:</span> <strong>{row.no_hp || '-'}</strong></div>
+                          </div>
+                          <div className="tracked-detail-section">
+                            <h5><Briefcase size={14} /> Karir & Pekerjaan</h5>
+                            <div className="detail-field"><span>Posisi:</span> <strong>{row.posisi || '-'}</strong></div>
+                            <div className="detail-field"><span>Tempat Kerja:</span> <strong>{row.tempat_kerja || '-'}</strong></div>
+                            <div className="detail-field"><MapPin size={13} /> <span>Alamat:</span> <strong>{row.alamat_kerja || '-'}</strong></div>
+                            <div className="detail-field"><span>Jenis:</span> <span className={`job-badge badge-${(row.jenis_pekerjaan || 'swasta').toLowerCase()}`}>{row.jenis_pekerjaan || '-'}</span></div>
+                          </div>
+                          <div className="tracked-detail-section">
+                            <h5><Building size={14} /> Info Perusahaan</h5>
+                            <div className="detail-field"><span>Sosmed Perusahaan:</span> <strong>{row.sosmed_perusahaan || '-'}</strong></div>
+                            <div className="detail-field"><span>Dilacak pada:</span> <strong>{row.last_tracked_at ? new Date(row.last_tracked_at).toLocaleString('id-ID') : '-'}</strong></div>
+                          </div>
                         </div>
                       </td>
                     </tr>
-
-                    {/* Expandable Detail Section */}
-                    {hasDetail && (
-                      <tr className="detail-expanded-row animate-fade-in" style={{ backgroundColor: 'rgba(5, 10, 24, 0.4)' }}>
-                        <td colSpan="8" style={{ padding: '1.5rem' }}>
-                          <div className="pddikti-history-table-container">
-                            <h5 className="history-subtitle">Detail Akademik: {row.nama}</h5>
-                            <div className="history-table-wrapper mb-4">
-                              <table className="history-table">
-                                <tbody>
-                                  <tr>
-                                    <td><strong>Jenjang</strong></td>
-                                    <td>{detailedMhs.jenjang || detailedMhs.data?.jenjang || '-'}</td>
-                                    <td><strong>Status Akhir</strong></td>
-                                    <td>{detailedMhs.status || detailedMhs.data?.status || row.status || '-'}</td>
-                                  </tr>
-                                  <tr>
-                                    <td><strong>Jenis Kelamin</strong></td>
-                                    <td>{detailedMhs.jenis_kelamin || detailedMhs.data?.jenis_kelamin || '-'}</td>
-                                    <td><strong>Tanggal Masuk</strong></td>
-                                    <td>{detailedMhs.tanggal_masuk || detailedMhs.data?.tanggal_masuk || '-'}</td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
-
-                            <h5 className="history-subtitle">Riwayat Studi (Semester)</h5>
-                            <div className="history-table-wrapper">
-                              <table className="history-table">
-                                <thead>
-                                  <tr>
-                                    <th>Semester</th>
-                                    <th>Status</th>
-                                    <th>SKS</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {(detailedMhs.riwayat_studi || detailedMhs.data?.riwayat_studi || []).map((sem, sIdx) => (
-                                    <tr key={sIdx}>
-                                      <td>{sem.id_smt || sem.semester}</td>
-                                      <td>{sem.nm_stat_mhs || sem.status || 'Aktif'}</td>
-                                      <td>{sem.sks_smt || 0}</td>
-                                    </tr>
-                                  ))}
-                                  {!(detailedMhs.riwayat_studi || detailedMhs.data?.riwayat_studi) && (
-                                    <tr><td colSpan="3" className="text-center">Tidak ada data riwayat.</td></tr>
-                                  )}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })
-            ) : (
-              <tr>
-                <td colSpan="8" className="empty-state">
-                  {isLoading ? 'Loading data dari database...' : 'Belum ada data alumni yang tersimpan.'}
-                </td>
-              </tr>
+                  )}
+                </Fragment>
+              ))
             )}
           </tbody>
         </table>
-      </div>
 
-      {/* Review Modal - Moved to App.jsx */}
+        {totalPages > 1 && (
+          <div className="pagination-controls">
+            <div className="pagination-info">
+              Halaman <strong>{page}</strong> dari <strong>{totalPages}</strong> ({total} alumni)
+            </div>
+            <div className="pagination-buttons">
+              <button className="page-btn" onClick={() => handlePageChange(page - 1)} disabled={page === 1}><ChevronLeft size={16} /></button>
+              <button className="page-btn" onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages}><ChevronRight size={16} /></button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

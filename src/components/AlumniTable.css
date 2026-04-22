@@ -158,3 +158,138 @@
   padding: 0.25rem 0.75rem;
   font-size: 0.75rem;
 }
+
+/* Detail Row Animations & Grid */
+.detail-expanded-row {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.animate-slide-down {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tracked-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tracked-detail-section h5 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-primary);
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 8px;
+}
+
+.detail-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.detail-field span {
+  min-width: 70px;
+  color: #94a3b8;
+}
+
+.detail-field strong {
+  color: #f8fafc;
+  font-weight: 500;
+  flex: 1;
+}
+
+/* Social Icons & Badges */
+.social-links-row {
+  display: flex;
+  gap: 8px;
+}
+
+.social-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition: transform 0.2s;
+}
+
+.social-icon:hover { transform: scale(1.15); }
+.social-icon.l { background: #0077b5; color: white; }
+.social-icon.i { background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); color: white; }
+.social-icon.f { background: #1877f2; color: white; }
+.social-icon.t { background: #000; color: white; border: 1px solid #333; }
+
+.mini-badge {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.mini-badge.li { background: rgba(0, 119, 181, 0.2); color: #60a5fa; border: 1px solid rgba(0, 119, 181, 0.3); }
+.mini-badge.ig { background: rgba(225, 48, 108, 0.2); color: #f472b6; border: 1px solid rgba(225, 48, 108, 0.3); }
+.mini-badge.fb { background: rgba(24, 119, 242, 0.2); color: #60a5fa; border: 1px solid rgba(24, 119, 242, 0.3); }
+.mini-badge.tt { background: rgba(255, 255, 255, 0.1); color: #e2e8f0; border: 1px solid rgba(255, 255, 255, 0.2); }
+
+.job-badge {
+  font-size: 0.65rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.badge-pns { background: rgba(245, 158, 11, 0.1); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.2); }
+.badge-wirausaha { background: rgba(16, 185, 129, 0.1); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.2); }
+.badge-swasta { background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2); }
+
+/* Pagination in Table */
+.pagination-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 15px;
+  padding: 15px;
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 12px;
+}
+.pagination-info { color: #94a3b8; font-size: 0.9rem; }
+.pagination-info strong { color: #f8fafc; }
+.pagination-buttons {
+  display: flex;
+  gap: 10px;
+}
+.page-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+.page-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.15); border-color: var(--accent-primary); }
+.page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
