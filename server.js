@@ -87,6 +87,32 @@ app.get('/api/v1/excel/search', (req, res) => {
   });
 });
 
+// 🔎 Get Excel Stats
+app.get('/api/v1/excel/stats', (req, res) => {
+  const total = alumniExcelData.length;
+  const yearStats = {};
+
+  alumniExcelData.forEach(row => {
+    let year = row['Tanggal Lulus'] || row['Tahun Lulus'] || row['Tahun Masuk'] || 'Unknown';
+    if (year && typeof year === 'string' && year.length >= 4) {
+      const match = year.match(/\b(19|20)\d{2}\b/);
+      if (match) year = match[0];
+    } else if (typeof year === 'number') {
+      year = year.toString();
+    }
+    
+    if (year && year !== '-' && year !== 'Unknown') {
+      if (!yearStats[year]) yearStats[year] = 0;
+      yearStats[year]++;
+    }
+  });
+
+  res.json({
+    total,
+    years: yearStats
+  });
+});
+
 // 🔎 OSINT Tracking (User-Preferred Logic)
 const SERPAPI_KEY = "781318403c31dc4aecf60aac47d5540d971eb58ab1c023207148552d339fb261";
 

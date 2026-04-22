@@ -24,58 +24,108 @@ const DashboardStats = () => {
     try {
       setIsLoading(true);
       
-      const { data, error } = await supabase
+      // 1. Fetch exact Excel stats from local server
+      let totalExcel = 142100;
+      let excelYears = {};
+      
+      try {
+        const res = await fetch('http://localhost:8000/api/v1/excel/stats');
+        if (res.ok) {
+          const statsData = await res.json();
+          totalExcel = statsData.total || 142100;
+          excelYears = statsData.years || {};
+        }
+      } catch (err) {
+        console.log("Failed to fetch exact excel stats, using estimates", err);
+      }
+      
+      // 2. Fetch Tracked & Pending counts from Supabase accurately
+      const { count: trackedCount, error: err1 } = await supabase
         .from('alumni')
-        .select('id, status, "Tanggal Lulus", "Tahun Masuk"');
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'Tracked');
+        
+      const { count: pendingCount, error: err2 } = await supabase
+        .from('alumni')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'Pending Validation');
+        
+      if (err1) console.error("Tracked count err:", err1);
+      if (err2) console.error("Pending count err:", err2);
 
-      if (error) throw error;
-      
-      const alumniList = data || [];
-      
-      let trackedCount = 0;
-      let untrackedCount = 0;
-      let pendingCount = 0;
-      
-      const yearMap = {};
-      
-      alumniList.forEach(alumni => {
-        const stat = alumni.status || 'Untracked';
-        if (stat === 'Tracked') trackedCount++;
-        else if (stat === 'Pending Validation') pendingCount++;
-        else untrackedCount++;
-        
-        let year = alumni['Tanggal Lulus'] || alumni['Tahun Masuk'] || 'Unknown';
-        if (year && typeof year === 'string' && year.length >= 4) {
-          const match = year.match(/\b(19|20)\d{2}\b/);
-          if (match) {
-            year = match[0];
-          }
-        }
-        
-        if (year && year !== '-' && year !== 'Unknown') {
-          if (!yearMap[year]) yearMap[year] = { year, tracked: 0, untracked: 0 };
-          if (stat === 'Tracked') yearMap[year].tracked++;
-          else yearMap[year].untracked++;
-        }
-      });
+      const tracked = trackedCount || 0;
+      const pending = pendingCount || 0;
+      const untracked = totalExcel - tracked - pending;
       
       setStats({
-        totalAlumni: alumniList.length,
-        tracked: trackedCount,
-        untracked: untrackedCount,
-        pending: pendingCount
+        totalAlumni: totalExcel,
+        tracked: tracked,
+        untracked: untracked,
+        pending: pending
       });
       
       const newKpiData = [
-        { name: 'Pending', value: pendingCount, color: '#f59e0b' },
-        { name: 'Tracked', value: trackedCount, color: '#10b981' },
-        { name: 'Untracked', value: untrackedCount, color: '#ef4444' }
+        { name: 'Pending', value: pending, color: '#f59e0b' },
+        { name: 'Tracked', value: tracked, color: '#10b981' },
+        { name: 'Untracked', value: untracked, color: '#ef4444' }
       ].filter(item => item.value > 0);
       
       setKpiData(newKpiData.length > 0 ? newKpiData : [{ name: 'No Data', value: 1, color: '#334155' }]);
       
-      const yearArray = Object.values(yearMap).sort((a, b) => parseInt(a.year) - parseInt(b.year));
-      setYearData(yearArray.slice(-10));
+      // 3. Fetch tracked/pending rows to group them by year
+      const { data: supabaseData, error: err3 } = await supabase
+        .from('alumni')
+        .select('"Tanggal Lulus", "Tahun Masuk", status')
+        .in('status', ['Tracked', 'Pending Validation']);
+        
+      const supabaseYears = {};
+      
+      if (supabaseData) {
+        supabaseData.forEach(alumni => {
+          let year = alumni['Tanggal Lulus'] || alumni['Tahun Masuk'] || 'Unknown';
+          if (year && typeof year === 'string' && year.length >= 4) {
+            const match = year.match(/\b(19|20)\d{2}\b/);
+            if (match) year = match[0];
+          }
+          
+          if (year && year !== '-' && year !== 'Unknown') {
+            if (!supabaseYears[year]) supabaseYears[year] = { tracked: 0, pending: 0 };
+            if (alumni.status === 'Tracked') supabaseYears[year].tracked++;
+            else if (alumni.status === 'Pending Validation') supabaseYears[year].pending++;
+          }
+        });
+      }
+      
+      // 4. Combine Excel Years with Supabase Years to get exact Untracked per year
+      const combinedYears = {};
+      
+      Object.keys(excelYears).forEach(y => {
+        combinedYears[y] = {
+          year: y,
+          total: excelYears[y],
+          tracked: 0,
+          pending: 0,
+          untracked: excelYears[y]
+        };
+      });
+      
+      Object.keys(supabaseYears).forEach(y => {
+        if (!combinedYears[y]) {
+          combinedYears[y] = { year: y, total: 0, tracked: 0, pending: 0, untracked: 0 };
+        }
+        const t = supabaseYears[y].tracked;
+        const p = supabaseYears[y].pending;
+        combinedYears[y].tracked += t;
+        combinedYears[y].pending += p;
+        combinedYears[y].untracked = Math.max(0, combinedYears[y].total - combinedYears[y].tracked - combinedYears[y].pending);
+      });
+      
+      const yearArray = Object.values(combinedYears)
+        .sort((a, b) => parseInt(a.year) - parseInt(b.year))
+        .filter(y => y.year >= '2000');
+        
+      // Limit to the most recent 15 years so the chart is readable
+      setYearData(yearArray.slice(-15));
       
     } catch (err) {
       console.error("Error fetching dashboard stats:", err);
@@ -97,7 +147,7 @@ const DashboardStats = () => {
           </div>
           <div className="kpi-content">
             <h3>Total Database</h3>
-            <div className="kpi-value">{stats.totalAlumni}</div>
+            <div className="kpi-value">{stats.totalAlumni.toLocaleString('id-ID')}</div>
           </div>
         </div>
         
@@ -107,7 +157,7 @@ const DashboardStats = () => {
           </div>
           <div className="kpi-content">
             <h3>Tracked Successfully</h3>
-            <div className="kpi-value text-success">{stats.tracked}</div>
+            <div className="kpi-value text-success">{stats.tracked.toLocaleString('id-ID')}</div>
           </div>
         </div>
 
@@ -117,7 +167,7 @@ const DashboardStats = () => {
           </div>
           <div className="kpi-content">
             <h3>Untracked / Lost</h3>
-            <div className="kpi-value text-danger">{stats.untracked}</div>
+            <div className="kpi-value text-danger">{stats.untracked.toLocaleString('id-ID')}</div>
           </div>
         </div>
 
@@ -127,7 +177,7 @@ const DashboardStats = () => {
           </div>
           <div className="kpi-content">
             <h3>Pending Validation</h3>
-            <div className="kpi-value text-warning">{stats.pending}</div>
+            <div className="kpi-value text-warning">{stats.pending.toLocaleString('id-ID')}</div>
           </div>
         </div>
       </div>
@@ -175,8 +225,8 @@ const DashboardStats = () => {
                     cursor={{fill: 'rgba(255,255,255,0.05)'}}
                   />
                   <Legend iconType="circle" />
-                  <Bar dataKey="tracked" name="Tracked" fill="var(--success)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="untracked" name="Untracked" fill="var(--danger)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="tracked" name="Tracked" fill="var(--success)" radius={[4, 4, 0, 0]} stackId="a" />
+                  <Bar dataKey="untracked" name="Untracked" fill="var(--danger)" radius={[4, 4, 0, 0]} stackId="a" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
